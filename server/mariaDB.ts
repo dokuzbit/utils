@@ -1,9 +1,6 @@
 import { createPool } from 'mariadb';
 import type { Pool, PoolConnection } from 'mariadb';
 import cache from './cache';
-const { DB_HOST, DB_USER, DB_PASS, DB_NAME } = process.env;
-
-console.log(DB_HOST, DB_USER, DB_NAME);
 
 type joinType = 'LEFT' | 'RIGHT' | 'INNER' | 'OUTER' | 'CROSS';
 interface params {
@@ -22,26 +19,25 @@ interface params {
 	chunk?: number | '?';
 	options?: any;
 }
+type dbConfig = {
+	host?: string;
+	user?: string;
+	password?: string;
+	database: string;
+	connectionLimit?: number;
+}
 class MariaDB {
-	private pool: Pool;
+	private pool: Pool | undefined;
 	private dbConfig: any;
 	private cache: typeof cache;
 	constructor() {
-		this.dbConfig = {
-			host: DB_HOST || 'localhost',
-			user: DB_USER,
-			password: DB_PASS,
-			database: DB_NAME,
-			connectionLimit: process.env.NODE_ENV === 'development' ? 1 : 5,
-			trace: process.env.NODE_ENV === 'development'
-			// idleTimeout: process.env.NODE_ENV === 'development' ? 10 : 1000,
-			// leakDetectionTimeout: process.env.NODE_ENV === 'development' ? 10 : 100
-		};
-		this.pool = createPool(this.dbConfig);
 		this.cache = cache;
 	}
 
-
+	config(dbConfig: any) {
+		this.dbConfig = dbConfig;
+		this.pool = createPool(this.dbConfig);
+	}
 
 	async q(params: params): Promise<any> {
 		let { command, from, select = '*', join = [], joinType, where = '1=1', placeholders, order, group, limit, page, offset, chunk, options } = params;
@@ -55,7 +51,8 @@ class MariaDB {
 		limit = command === 'findFirst' ? 1 : limit ? limit : 1000;
 		offset = limit && command !== 'findFirst' && page ? (page - 1) * limit : offset;
 		placeholders = typeof placeholders === 'string' ? [placeholders] : placeholders;
-		if (from.length - join.length != 1) return { error: 'Join count and from count mismatch' };
+		if (Array.isArray(from) && from.length - join.length != 1) return { error: 'Join count and from count mismatch' };
+
 		if (joinType && typeof joinType != 'string' && joinType.length != join.length) return { error: 'Join type count and join count mismatch' };
 		joinType = joinType && typeof joinType === 'string' ? [joinType] : joinType;
 

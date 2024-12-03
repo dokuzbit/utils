@@ -1,10 +1,16 @@
 import { connect, StringCodec, JSONCodec } from 'nats';
 import type { NatsConnection, Subscription, PublishOptions, RequestOptions } from 'nats';
+// const { NATS_URL, NATS_USER, NATS_PASS } = process.env;
+const { NATS_URL, NATS_USER, NATS_PASS } = import.meta.env;
+
+// import { NATS_URL, NATS_USER, NATS_PASS } from i;
+import { env } from '$env/dynamic/private';
+
+console.log(env);
+
 
 /**
  * NATS bağlantısını yöneten sınıf
- * 
- * 
  * @method connect: NATS bağlantısını kurma
  * @method publish: Mesaj gönderme
  * @method request: Mesaj isteği
@@ -16,14 +22,13 @@ class NatsWrapper {
 	private nc: NatsConnection | null = null;
 	private jc = JSONCodec();
 	private sc = StringCodec();
-
 	async connect(): Promise<void> {
 		try {
 			if (!this.nc) {
 				this.nc = await connect({
-					servers: process.env.NATS_URL,
-					user: process.env.NATS_USER,
-					pass: process.env.NATS_PASS
+					servers: NATS_URL,
+					user: NATS_USER,
+					pass: NATS_PASS
 				});
 				console.log('NATS bağlantısı başarılı');
 			}
