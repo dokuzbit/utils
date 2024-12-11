@@ -1,9 +1,18 @@
 import { createPool } from 'mariadb';
-import type { Pool, PoolConnection } from 'mariadb';
+import type { Pool, PoolConnection, QueryOptions, UpsertResult } from 'mariadb';
 import cache from './cache';
 
+type dbConfig = {
+	host?: string;
+	user?: string;
+	password?: string;
+	database?: string;
+	connectionLimit?: number;
+	trace?: boolean;
+}
+
 type joinType = 'LEFT' | 'RIGHT' | 'INNER' | 'OUTER' | 'CROSS';
-interface params {
+type QueryParams = {
 	command?: 'findFirst' | 'findMany' | 'findAll';
 	from: string | string[];
 	select?: string | string[];
@@ -19,27 +28,32 @@ interface params {
 	chunk?: number | '?';
 	options?: any;
 }
-type dbConfig = {
-	host?: string;
-	user?: string;
-	password?: string;
-	database: string;
-	connectionLimit?: number;
+
+type UpdateParams = {
+	table: string;
+	values: Record<string, any>[] | Record<string, any>;
+	where: string | string[] | Record<string, any> | Record<string, any>[];
 }
+
 class MariaDB {
 	private pool: Pool | undefined;
-	private dbConfig: any;
+	private dbConfig: dbConfig | undefined;
 	private cache: typeof cache;
 	constructor() {
 		this.cache = cache;
 	}
 
-	config(dbConfig: any) {
+	config(dbConfig: dbConfig) {
+		if (!dbConfig || !dbConfig.host || !dbConfig.database || !dbConfig.user || !dbConfig.password) throw new Error('database, user and password are required');
 		this.dbConfig = dbConfig;
+		this.dbConfig.trace = dbConfig.trace || process.env.NODE_ENV === 'development';
+		this.dbConfig.connectionLimit = dbConfig.connectionLimit || 5;
 		this.pool = createPool(this.dbConfig);
 	}
 
-	async q(params: params): Promise<any> {
+	async select(params: QueryParams): Promise<any> {
+		if (!this.pool) return { error: 'pool is not initialized' };
+		if (!params) return { error: 'params is required' };
 		let { command, from, select = '*', join = [], joinType, where = '1=1', placeholders, order, group, limit, page, offset, chunk, options } = params;
 		if (command === undefined) command = limit && limit > 1 ? 'findMany' : 'findFirst';
 		if (command === 'findAll' && chunk === undefined) chunk = 0;
@@ -95,7 +109,6 @@ class MariaDB {
 		}
 	}
 
-
 	private async getChunk(sql: string, chunk: number | '?' = 0): Promise<[number | null, number | null, number | null]> {
 		let chunkTable = await cache.get('chunk' + sql)
 		if (!chunkTable) {
@@ -113,6 +126,91 @@ class MariaDB {
 		return [chunkTable[chunk][0], chunkTable[chunk][1], chunkTable.length]
 	}
 
+	// TODO: Work ongoing, where is ok
+	async update<T>(params: UpdateParams): Promise<T | null> {
+		if (!params.where) throw new Error('where is required');
+		let { table, values, where } = params;
+		if (!Array.isArray(values)) values = [values]
+		// Eğer where string[] ise join edilir
+		if (Array.isArray(where) && typeof where[0] === 'string') where = where.join(' AND ');
+		if (Array.isArray(where) && typeof where[0] === 'object') where = where.map(w => Object.entries(w).map(([key, value]) => `${key} = '${value}'`).join(' AND ')).join(' AND ');
+
+		// where: { name: 'test1', id: 1 }
+		let wherePlaceholders: any[] = []
+		if (typeof where === 'object' && !Array.isArray(where)) {
+			wherePlaceholders = Object.values(where)
+			where = Object.entries(where).map(([key, value]) => `${key} = ?`).join(' AND ');
+		}
+
+		where = typeof where === 'string' ? where : where?.join(' AND ');
+		console.log('where:', where);
+
+		const sql = `UPDATE ${table} SET ${Object.keys(values[0])
+			.map((key) => `${key} = ?`)
+			.join(',')} WHERE ${where}`;
+		const placeholders = values.flatMap(Object.values)
+		if (wherePlaceholders) placeholders.push(...wherePlaceholders)
+		console.log(sql, placeholders);
+		return await this.query(sql, placeholders);
+	}
+
+	// insert single or batch
+	async insert<T>(table: string, values: Record<string, any> | Record<string, any>[]): Promise<any> {
+		if (Array.isArray(values)) {
+			const sql = `INSERT INTO ${table} (${Object.keys(values[0]).join(',')}) VALUES ${values
+				.map(() => `(${Object.keys(values[0]).map(() => `?`).join(',')})`)
+				.join(', ')}`;
+			const params = values.flatMap(Object.values);
+			return await this.batch(sql, params);
+		} else {
+			const sql = `INSERT INTO ${table} (${Object.keys(values).join(',')}) VALUES (${Object.keys(values)
+				.map((key) => `?`)
+				.join(',')})`;
+			return await this.query(sql, Object.values(values));
+		}
+	}
+
+	public async upsert<T>(table: string, values: Record<string, any>, update: Record<string, any>): Promise<any> {
+		const sql = `INSERT INTO ${table} (${Object.keys(values).join(',')}) VALUES (${Object.keys(values)
+			.map((key) => `?`)
+			.join(',')}) ON DUPLICATE KEY UPDATE ${Object.keys(update)
+				.map((key) => `${key} = ?`)
+				.join(',')}`;
+		return await this.query(sql, [...Object.values(values), ...Object.values(update)]);
+	}
+
+
+
+	async delete<T>(table: string, where: string, params: any[] = []): Promise<T | null> {
+		if (!where) throw new Error('where is required');
+		const sql = `DELETE FROM ${table} WHERE ${where}`;
+		return await this.query(sql, params);
+	}
+
+
+	//---------------------------------------------------------------------------------------------------
+	// Yardımcı fonksiyonlar - Private olabilir ama dışarıdan da erişilebilir
+	//---------------------------------------------------------------------------------------------------
+	public async query(sql: string | QueryOptions, values?: any, params: Record<string, any>[] = []): Promise<any> {
+		if (!this.pool) return { error: 'pool is not initialized' };
+		if (params.length > 0 && typeof sql === 'string') sql = { sql: sql, ...params }
+		return await this.pool.query(sql, values);
+	}
+
+	public async execute(sql: string | QueryOptions, values?: any, params: Record<string, any>[] = []): Promise<any> {
+		if (!this.pool) return { error: 'pool is not initialized' };
+		if (params.length > 0 && typeof sql === 'string') sql = { sql: sql, ...params }
+		return await this.pool.execute(sql, values);
+	}
+
+	public async batch(sql: string | QueryOptions, values?: any[], params: Record<string, any>[] = []): Promise<UpsertResult | UpsertResult[] | { error: unknown }> {
+		if (!this.pool) return { error: 'pool is not initialized' };
+		if (params.length > 0 && typeof sql === 'string') sql = { sql: sql, ...params }
+		const conn = await this.pool.getConnection();
+		const result = await conn.batch(sql, values);
+		conn.release();
+		return result;
+	}
 
 
 
@@ -187,47 +285,6 @@ class MariaDB {
 		return [...new Set(tables)];
 	}
 
-	async insert<T>(table: string, values: Record<string, any>): Promise<any> {
-		const sql = `INSERT INTO ${table} (${Object.keys(values).join(',')}) VALUES (${Object.keys(values)
-			.map((key) => `?`)
-			.join(',')})`;
-		return await this.query(sql, Object.values(values));
-	}
-
-	async upsert<T>(table: string, values: Record<string, any>, update: Record<string, any>): Promise<any> {
-		const sql = `INSERT INTO ${table} (${Object.keys(values).join(',')}) VALUES (${Object.keys(values)
-			.map((key) => `?`)
-			.join(',')}) ON DUPLICATE KEY UPDATE ${Object.keys(update)
-				.map((key) => `${key} = ?`)
-				.join(',')}`;
-		return await this.query(sql, [...Object.values(values), ...Object.values(update)]);
-	}
-
-	async update<T>(table: string, values: Record<string, any>, where: string, params: any[] = []): Promise<T | null> {
-		if (!where) throw new Error('where is required');
-		const sql = `UPDATE ${table} SET ${Object.keys(values)
-			.map((key) => `${key} = ?`)
-			.join(',')} WHERE ${where}`;
-		return await this.query(sql, [...Object.values(values), ...params]);
-	}
-
-	async delete<T>(table: string, where: string, params: any[] = []): Promise<T | null> {
-		if (!where) throw new Error('where is required');
-		const sql = `DELETE FROM ${table} WHERE ${where}`;
-		return await this.query(sql, params);
-	}
-
-	async query(sql: string, values?: any[], params?: any[]): Promise<any> {
-		// console.log('📂 src/lib/server/mariaDB.ts 👉 91 👀 sql ➤ ', sql);
-		// console.log('📂 src/lib/server/mariaDB.ts 👉 92 👀 values ➤ ', values);
-		// console.log('📂 src/lib/server/mariaDB.ts 👉 93 👀 params ➤ ', params);
-		let conn: PoolConnection | undefined;
-		conn = await this.pool.getConnection();
-		const q = Object.assign({ sql: sql, values: values }, ...(params || []));
-		const result = conn.query(q);
-		if (conn) conn.release();
-		return result;
-	}
 
 	async getJsonValue(table: string, where: string, jsonField: string, path: string = '*') {
 		const sql = `SELECT JSON_VALUE(${jsonField}, ?) as value FROM ${table} WHERE ${where} LIMIT 1`;
@@ -278,19 +335,7 @@ class MariaDB {
 		await this.pool.query('ROLLBACK');
 	}
 
-	async batch<T>(sql: string, params?: any[]): Promise<T[]> {
-		let conn: PoolConnection | undefined;
-		try {
-			conn = await this.pool.getConnection();
-			const result = await conn.batch(sql, params);
-			return result;
-		} catch (err) {
-			console.error('Sorgu yürütme hatası:', err);
-			throw err;
-		} finally {
-			if (conn) conn.release();
-		}
-	}
+
 
 	async close(): Promise<void> {
 		await this.pool.end();

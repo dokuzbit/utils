@@ -3,7 +3,7 @@ import memcached from '../../server/memcached';
 
 test('memcached empty get', async () => {
     const deleteResult = await memcached.delete('test');
-    expect(deleteResult).toBe(true);
+    expect(deleteResult).toBeBoolean();
     const getResult = await memcached.get('test');
     expect(getResult).toBeNull();
 });

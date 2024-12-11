@@ -1,13 +1,5 @@
 import { connect, StringCodec, JSONCodec } from 'nats';
 import type { NatsConnection, Subscription, PublishOptions, RequestOptions } from 'nats';
-// const { NATS_URL, NATS_USER, NATS_PASS } = process.env;
-const { NATS_URL, NATS_USER, NATS_PASS } = import.meta.env;
-
-// import { NATS_URL, NATS_USER, NATS_PASS } from i;
-import { env } from '$env/dynamic/private';
-
-console.log(env);
-
 
 /**
  * NATS bağlantısını yöneten sınıf
@@ -22,13 +14,24 @@ class NatsWrapper {
 	private nc: NatsConnection | null = null;
 	private jc = JSONCodec();
 	private sc = StringCodec();
-	async connect(): Promise<void> {
+
+	private servers: string | string[] = '';
+	private user: string = '';
+	private pass: string = '';
+
+	config(servers: string | string[] = '', user: string = '', pass: string = ''): void {
+		this.servers = servers;
+		this.user = user;
+		this.pass = pass;
+	}
+
+	private async connect(): Promise<void> {
 		try {
 			if (!this.nc) {
 				this.nc = await connect({
-					servers: NATS_URL,
-					user: NATS_USER,
-					pass: NATS_PASS
+					servers: this.servers,
+					user: this.user,
+					pass: this.pass
 				});
 				console.log('NATS bağlantısı başarılı');
 			}
@@ -44,6 +47,7 @@ class NatsWrapper {
 			? this.sc.encode(data)
 			: this.jc.encode(data);
 		this.nc!.publish(subject, encodedData, options);
+		await this.nc!.flush();
 	}
 
 	async request(subject: string, data: string | object, options?: RequestOptions): Promise<any> {
@@ -55,6 +59,7 @@ class NatsWrapper {
 		return this.jc.decode(response.data);
 	}
 
+	// TODO: Tüm testleri aynı anda çalıştırınca hata veriyor.
 	async subscribe(subject: string, callback: (data: any) => void): Promise<Subscription> {
 		if (!this.nc) await this.connect();
 		const subscription = this.nc!.subscribe(subject);
@@ -72,8 +77,14 @@ class NatsWrapper {
 		return subscription;
 	}
 
+	async unsubscribe(subscription: Subscription): Promise<void> {
+		await this.nc!.drain();
+		subscription.unsubscribe();
+	}
+
 	async disconnect(): Promise<void> {
 		if (this.nc) {
+			await this.nc.drain();
 			await this.nc.close();
 			this.nc = null;
 			console.log('NATS bağlantısı kapatıldı');
