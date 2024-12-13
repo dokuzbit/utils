@@ -34,6 +34,15 @@ for (const sql of initSql) {
     console.log(await db.execute(sql));
 }
 
+test('getFirst', async () => {
+    db.execute('use test');
+    db.insert(TABLE1, { name: 'test1', data: { color: 'white', size: 'M' } });
+    const result = await db.getFirst('*', TABLE1, 'name = "test1"');
+    expect(result).toBeDefined();
+    expect(result.name).toBe('test1');
+});
+
+
 test('insert', async () => {
     const result = await db.insert(TABLE1, { name: 'test1', data: { color: 'white', size: 'M' } });
     expect(result).toBeDefined();

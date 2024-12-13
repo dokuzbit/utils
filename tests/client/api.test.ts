@@ -8,6 +8,13 @@ test('api GET', async () => {
     expect(getResult.error).toBeNull();
 });
 
+test('api GET Error', async () => {
+    api.setBaseUrl('https://jsonplaceholder.typicode.com/2');
+    const getResult = await api.fetch('posts/1');
+    expect(getResult.result).toBeNull();
+    expect(getResult.error).toBeDefined();
+});
+
 test('api POST', async () => {
     api.setBaseUrl('https://jsonplaceholder.typicode.com/');
 

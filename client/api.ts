@@ -27,8 +27,6 @@ class Api {
 		const query = typeof payload === 'string' ? '?' + payload : '';
 		console.log(`URL: ${globalApiBaseUrl}${url}${query}`);
 		console.log(typeof payload === 'object' ? 'POST' : 'GET');
-
-
 		try {
 			const result = await fetch(`${globalApiBaseUrl}${url}${query}`, {
 				method: typeof payload === 'object' ? 'POST' : 'GET',
@@ -37,9 +35,9 @@ class Api {
 			if (result.ok) {
 				return { result: await result.json(), error: null };
 			}
-			return { result: null, error: result };
+			return { result: null, error: { status: result.status, statusText: result.statusText } };
 		} catch (err: unknown) {
-			return { result: null, error: err instanceof Error ? err.message : 'Unknown error' };
+			return { result: null, error: err instanceof Error ? { error: { name: err.name, message: err.message } } : 'Unknown error' };
 		}
 	};
 }
