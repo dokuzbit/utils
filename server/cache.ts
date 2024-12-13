@@ -1,5 +1,5 @@
 /**
- * @version 0.1.0
+ * @version 0.1.1
  * Cache sınıfı, bellekte verileri saklamak ve erişim hızını artırmak için kullanılır.
  * 
  * @method set: Veriyi cache'e ekler.
