@@ -29,7 +29,7 @@ session.config({ cookies: mockCookies, cookieName: 'test_cookie' });
 
 test('session set get', async () => {
     session.setToken({ id: 1, name: 'test' });
-        const token = await session.getToken('');
+    const token = await session.getToken('');
     expect(token).toMatchObject({ payload: { id: 1, name: 'test' }, expired: false, error: null });
 });
 
@@ -79,3 +79,10 @@ test('session get token expired callback true', async () => {
     const token = await session.getToken('', async () => true);
     expect(token).toMatchObject({ payload: { id: 1, name: 'test'}, expired: false, error: null});
 });
+
+test('updateToken', async () => {
+    session.setToken({session: {user: {name:'Joe',age:20, id:1}} });
+    const token = await session.updateToken({session: {user: {age:21, id:2}} });
+    expect(token).toMatchObject({ payload: { session: { user: { name: 'Joe', age: 21, id: 2 } } }, expired: false, error: null});
+});
+

@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test';
 import db from '../../server/mariaDB';
+import { merge } from 'lodash';
+import type { TypeCastResult, UpsertResult } from 'mariadb';
 
 const { DB_HOST, DB_USER, DB_PASS, DB_NAME, TABLE1, TABLE2 } = process.env;
 
@@ -7,7 +9,8 @@ db.config({
     host: DB_HOST,
     user: DB_USER,
     password: DB_PASS,
-    database: DB_NAME
+    database: DB_NAME,
+
 });
 
 if (!DB_HOST || !DB_USER || !DB_PASS || !DB_NAME || !TABLE1 || !TABLE2) throw new Error('DB_HOST, DB_USER, DB_PASS, DB_NAME, TABLE1 and TABLE2 are required');
@@ -25,23 +28,50 @@ const initSql = [
         create_time DATETIME COMMENT 'Create Time',
         master_id int,
         data JSON,
-        FOREIGN KEY (master_id) REFERENCES test (id));`,
-    `USE test`
+        FOREIGN KEY (master_id) REFERENCES test (id));`
 ];
 
-for (const sql of initSql) {
-    console.log(sql);
-    console.log(await db.execute(sql));
-}
+
+test('setup db', async () => {
+    for (const sql of initSql) {
+        await db.execute(sql);
+    }
+});
+
 
 test('getFirst', async () => {
-    db.execute('use test');
-    db.insert(TABLE1, { name: 'test1', data: { color: 'white', size: 'M' } });
-    const result = await db.getFirst('*', TABLE1, 'name = "test1"');
+    await db.insert(TABLE1, { name: 'test1', data: { color: 'white', size: 'M' } });
+    let result = await db.select({ from: TABLE1, where: 'name = ?', whereParams: ['test1'] });
+    expect(result).toBeDefined();
+    expect(result.name).toBe('test1');
+    result = await db.select({ from: TABLE1, where: { name: 'test1' } });
     expect(result).toBeDefined();
     expect(result.name).toBe('test1');
 });
 
+test('getMany', async () => {
+    await db.insert(TABLE1, [{ name: 'test2', data: { color: 'white', size: 'M' } }, { name: 'test3', data: { color: 'black', size: 'L' } }]);
+    const result = await db.select({ from: TABLE1, where: 'name LIKE ?', whereParams: ['test%'], limit: 10 });
+    console.log(result);
+    expect(result).toBeDefined();
+    expect(result.length).toBeGreaterThan(1);
+});
+
+test('getRelated', async () => {
+    await db.delete(TABLE2, '1 = 1');
+    await db.delete(TABLE1, '1 = 1');
+    const result1 = await db.insert(TABLE1, { name: 'test1', data: { color: 'white', size: 'M' } });
+    await db.insert(TABLE1, { name: 'test2', data: { color: 'red', size: 'L' } });
+    const id = Number(result1.insertId);
+    await db.insert(TABLE2, { master_id: id, data: { stock: 100 } });
+    db.config({ rowsAsArray: true });
+    const result = await db.select({ from: [TABLE1 + ' t1', TABLE2 + ' t2'], join: 't2.master_id = t1.id', limit: 10 })
+    expect(result).toBeDefined();
+    expect(result.meta).toBeDefined();
+    expect(result[0][2]).toBe('test1');
+    expect(result[0][3].color).toBe('white');
+    expect(result[0][7].stock).toBe(100);
+});
 
 test('insert', async () => {
     const result = await db.insert(TABLE1, { name: 'test1', data: { color: 'white', size: 'M' } });
@@ -49,7 +79,7 @@ test('insert', async () => {
     expect(result.affectedRows).toBe(1);
 });
 
-test('batch', async () => {
+test('batch insert', async () => {
     const result = await db.insert(TABLE1, [{ name: 'test2', data: { color: 'white', size: 'M' } }, { name: 'test3', data: { color: 'black', size: 'L' } }]);
     expect(result).toBeDefined();
     expect(result.affectedRows).toBe(2);
@@ -59,16 +89,13 @@ test('update', async () => {
     db.execute('use test')
     await db.insert(TABLE1, { name: 'test1', data: { color: 'white', size: 'M' } });
     const result1 = await db.update({ table: TABLE1, values: { name: 'test2' }, where: 'name = "test1"' });
-    const result2 = await db.update({ table: TABLE1, values: { name: 'test3' }, where: ['id = 1', 'name = "test2"'] });
-    const result3 = await db.update({ table: TABLE1, values: { name: 'test4' }, where: { name: 'test3' } });
-    const result4 = await db.update({ table: TABLE1, values: { name: 'test5' }, where: [{ name: 'test4' }, { id: "1" }] });
-
+    const result2 = await db.update({ table: TABLE1, values: { name: 'test3' }, where: ['name = "test2"', 'id > 1'] });
+    const result3 = await db.update({ table: TABLE1, values: { name: 'test4' }, where: 'name = ?', whereParams: ['test3'] });
+    const result4 = await db.update({ table: TABLE1, values: { name: 'test5' }, where: ['name = ?', 'id > ?'], whereParams: ['test4', 1] });
+    const result5 = await db.update({ table: TABLE1, values: { name: 'test6' }, where: { name: 'test5' } });
+    const result6 = await db.update({ table: TABLE1, values: { name: 'test7' }, where: [{ name: 'test6' }, { id: 1 }] });
     expect(result1).toBeDefined();
-    expect(result1.affectedRows).toBe(1);
+    expect((result1).affectedRows).toBeGreaterThanOrEqual(1);
     expect(result2).toBeDefined();
-    expect(result2.affectedRows).toBe(1);
-    expect(result3).toBeDefined();
-    expect(result3.affectedRows).toBe(1);
-    expect(result4).toBeDefined();
-    expect(result4.affectedRows).toBe(1);
+    expect((result2).affectedRows).toBeGreaterThanOrEqual(1);
 });

@@ -1,25 +1,33 @@
 import { createPool } from 'mariadb';
 import type { Pool, PoolConnection, QueryOptions, UpsertResult } from 'mariadb';
 import cache from './cache';
+import { merge } from 'lodash-es';
 
-type dbConfig = {
+
+type joinType = 'LEFT' | 'RIGHT' | 'INNER' | 'OUTER' | 'CROSS';
+type Where = string | string[] | Record<string, any> | Record<string, any>[];
+type WhereParams = any | any[];
+interface dbConfig {
 	host?: string;
 	user?: string;
 	password?: string;
 	database?: string;
 	connectionLimit?: number;
 	trace?: boolean;
+	insertIdAsNumber?: boolean;
+	decimalAsNumber?: boolean;
+	namedPlaceholders?: boolean;
+	rowsAsArray?: boolean;
+	nestTables?: boolean;
 }
-
-type joinType = 'LEFT' | 'RIGHT' | 'INNER' | 'OUTER' | 'CROSS';
-type QueryParams = {
+interface QueryParams {
 	command?: 'findFirst' | 'findMany' | 'findAll';
-	from: string | string[];
 	select?: string | string[];
+	from: string | string[];
 	join?: string | string[];
 	joinType?: joinType[] | joinType;
-	where?: string | string[];
-	placeholders?: any | any[];
+	where?: Where;
+	whereParams?: any | any[];
 	order?: string | string[];
 	group?: string | string[];
 	limit?: number;
@@ -27,44 +35,50 @@ type QueryParams = {
 	offset?: number;
 	chunk?: number | '?';
 	options?: any;
+	asArray?: boolean;
 }
 
-type UpdateParams = {
+interface UpdateParams {
 	table: string;
 	values: Record<string, any>[] | Record<string, any>;
-	where: string | string[] | Record<string, any> | Record<string, any>[];
+	where: Where;
+	whereParams?: WhereParams;
 }
+
+
 
 class MariaDB {
 	private pool: Pool | undefined;
 	private dbConfig: dbConfig | undefined;
-	private cache: typeof cache;
+	private cache: typeof cache = cache;
 	constructor() {
-		this.cache = cache;
 	}
 
 	config(dbConfig: dbConfig) {
-		if (!dbConfig || !dbConfig.host || !dbConfig.database || !dbConfig.user || !dbConfig.password) throw new Error('database, user and password are required');
-		this.dbConfig = dbConfig;
+		this.dbConfig = merge(this.dbConfig, dbConfig);
 		this.dbConfig.trace = dbConfig.trace || process.env.NODE_ENV === 'development';
 		this.dbConfig.connectionLimit = dbConfig.connectionLimit || 5;
+		// this.dbConfig.metaAsArray = dbConfig.metaAsArray || false;
+		if (!this.dbConfig || !this.dbConfig.host || !this.dbConfig.database || !this.dbConfig.user || !this.dbConfig.password) throw new Error('database, user and password are required');
 		this.pool = createPool(this.dbConfig);
 	}
 
+	// TODO: implement asArray
+	// TODO: chunk & asArray ???
 	async select(params: QueryParams): Promise<any> {
 		if (!this.pool) return { error: 'pool is not initialized' };
 		if (!params) return { error: 'params is required' };
-		let { command, from, select = '*', join = [], joinType, where = '1=1', placeholders, order, group, limit, page, offset, chunk, options } = params;
+		let { command, from, select = '*', join = [], joinType, where = '1=1', whereParams, order, group, limit, page, offset, chunk, options } = params;
 		if (command === undefined) command = limit && limit > 1 ? 'findMany' : 'findFirst';
 		if (command === 'findAll' && chunk === undefined) chunk = 0;
 		if (chunk !== undefined) command = 'findAll'
 
-		where = typeof where === 'string' ? where : where?.join(' AND ');
+		whereParams = this.buildWhereParams(where, whereParams)
+		where = this.buildWhere(where)
 		select = typeof select === 'string' ? select : select.join(',');
 		join = typeof join === 'string' ? [join] : join;
 		limit = command === 'findFirst' ? 1 : limit ? limit : 1000;
 		offset = limit && command !== 'findFirst' && page ? (page - 1) * limit : offset;
-		placeholders = typeof placeholders === 'string' ? [placeholders] : placeholders;
 		if (Array.isArray(from) && from.length - join.length != 1) return { error: 'Join count and from count mismatch' };
 
 		if (joinType && typeof joinType != 'string' && joinType.length != join.length) return { error: 'Join type count and join count mismatch' };
@@ -99,8 +113,8 @@ class MariaDB {
 					if (offset) sql += ` OFFSET ${offset}`;
 				}
 				try {
-					const result = await this.query(sql, placeholders);
-					return command === 'findFirst' ? result[0] : result;
+					const result = await this.query(sql, whereParams);
+					return command === 'findFirst' && !result.data ? result[0] : result;
 				} catch (error: any) {
 					return { error };
 				}
@@ -109,6 +123,7 @@ class MariaDB {
 		}
 	}
 
+	// TODO: refactor smilar to pagination and itteratable
 	private async getChunk(sql: string, chunk: number | '?' = 0): Promise<[number | null, number | null, number | null]> {
 		let chunkTable = await cache.get('chunk' + sql)
 		if (!chunkTable) {
@@ -126,35 +141,22 @@ class MariaDB {
 		return [chunkTable[chunk][0], chunkTable[chunk][1], chunkTable.length]
 	}
 
-	// TODO: Work ongoing, where is ok
-	async update<T>(params: UpdateParams): Promise<T | null> {
+	// DONE: all tests passed
+	async update(params: UpdateParams): Promise<UpsertResult> {
 		if (!params.where) throw new Error('where is required');
-		let { table, values, where } = params;
+		let { table, values, where, whereParams } = params;
 		if (!Array.isArray(values)) values = [values]
-		// Eğer where string[] ise join edilir
-		if (Array.isArray(where) && typeof where[0] === 'string') where = where.join(' AND ');
-		if (Array.isArray(where) && typeof where[0] === 'object') where = where.map(w => Object.entries(w).map(([key, value]) => `${key} = '${value}'`).join(' AND ')).join(' AND ');
-
-		// where: { name: 'test1', id: 1 }
-		let wherePlaceholders: any[] = []
-		if (typeof where === 'object' && !Array.isArray(where)) {
-			wherePlaceholders = Object.values(where)
-			where = Object.entries(where).map(([key, value]) => `${key} = ?`).join(' AND ');
-		}
-
-		where = typeof where === 'string' ? where : where?.join(' AND ');
-		console.log('where:', where);
-
+		// NOTE: whereParams must be built before where
+		whereParams = this.buildWhereParams(where, whereParams)
+		where = this.buildWhere(where)
 		const sql = `UPDATE ${table} SET ${Object.keys(values[0])
 			.map((key) => `${key} = ?`)
 			.join(',')} WHERE ${where}`;
-		const placeholders = values.flatMap(Object.values)
-		if (wherePlaceholders) placeholders.push(...wherePlaceholders)
-		console.log(sql, placeholders);
-		return await this.query(sql, placeholders);
+		let placeholders = values.flatMap(Object.values)
+		return await this.query(sql, [...placeholders, ...whereParams]);
 	}
 
-	// insert single or batch
+	// DONE: insert single or batch
 	async insert<T>(table: string, values: Record<string, any> | Record<string, any>[]): Promise<any> {
 		if (Array.isArray(values)) {
 			const sql = `INSERT INTO ${table} (${Object.keys(values[0]).join(',')}) VALUES ${values
@@ -180,9 +182,9 @@ class MariaDB {
 	}
 
 
-
+	// DONE: delete single or batch
 	async delete<T>(table: string, where: string, params: any[] = []): Promise<T | null> {
-		if (!where) throw new Error('where is required');
+		if (!table || !where) throw new Error('table and where is required');
 		const sql = `DELETE FROM ${table} WHERE ${where}`;
 		return await this.query(sql, params);
 	}
@@ -191,10 +193,14 @@ class MariaDB {
 	//---------------------------------------------------------------------------------------------------
 	// Yardımcı fonksiyonlar - Private olabilir ama dışarıdan da erişilebilir
 	//---------------------------------------------------------------------------------------------------
+
 	public async query(sql: string | QueryOptions, values?: any, params: Record<string, any>[] = []): Promise<any> {
 		if (!this.pool) return { error: 'pool is not initialized' };
 		if (params.length > 0 && typeof sql === 'string') sql = { sql: sql, ...params }
-		return await this.pool.query(sql, values);
+		if (process.env.NODE_ENV === 'test') console.log(sql, values);
+		const result = await this.pool.query(sql, values);
+		if (result.meta) result.meta = this.getColumnDefs(result.meta);
+		return result
 	}
 
 	public async execute(sql: string | QueryOptions, values?: any, params: Record<string, any>[] = []): Promise<any> {
@@ -212,78 +218,38 @@ class MariaDB {
 		return result;
 	}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	async getFirst(select: string = '*', from: string, where: string = '1=1', params: any[] = []): Promise<any> {
-		const sql = `SELECT ${select} FROM ${from} WHERE ${where} LIMIT 1`;
-		const result = await this.query(sql, params);
-		return result.length > 0 ? result[0] : null;
+	// ---------------------------------------------------------------------------------------------------
+	// PRIVATE HELPER FUNCTIONS
+	// ---------------------------------------------------------------------------------------------------
+	private buildWhere(where: Where): string {
+		// if where is empty, return 1=1
+		if (!where) return '1=1'
+		// if where is string, return it
+		if (typeof where === 'string') return where
+		// if where is array of strings, join them with AND
+		if (Array.isArray(where) && typeof where[0] === 'string') return where.join(' AND ')
+		// if where is object, convert to string
+		if (typeof where === 'object') return Object.entries(where).map(([key, value]) => `${key} = ?`).join(' AND ')
+		// if where is array of objects, convert to string
+		if (Array.isArray(where) && typeof where[0] === 'object') return where.map(w => Object.entries(w).map(([key, value]) => `${key} = ?`).join(' AND ')).join(' AND ')
+		throw new Error('Invalid where type')
 	}
 
-	// TODO: cache'i düzenle, select kısmını da cache'le
-	async getAll(select: string = '*', from: string, where: string = '1=1', params: any[] = [], others: string = '', ttl?: number): Promise<any[]> {
-		if (!where) where = '1=1';
-		// Tablo isimlerini çıkar
-		const tableNames = this.extractTableNames(from);
-		// Cache key'i için tablo isimlerini birleştir
-		const cacheKey = `${tableNames.join(':')}:${where}`;
-
-		// Cache'i kontrol et
-		const cached = await this.cache.get(cacheKey);
-		// Cache'de veri varsa, veritabınından update time ları kontrol ederek cache'in eski olup olmadığını kontrol et
-		if (cached) {
-			console.log('cache var');
-			const timeStamp = this.cache.getMeta(cacheKey)?.timeStamp;
-			const sql = `SELECT table_name,update_time FROM information_schema.tables WHERE table_schema = '${DB_NAME}' AND table_name IN (${tableNames.map(name => `'${name}'`).join(',')}) AND UNIX_TIMESTAMP(update_time) > ${timeStamp}`;
-			const row = await this.query(sql);
-			if (row.length === 0) return cached;
-		}
-		console.log("db lookup");
-		const sql = `SELECT ${select} FROM ${from} WHERE ${where} ${others}`;
-		const data: any[] = await this.query(sql, params);
-		if (ttl && ttl > 0) this.cache.set(cacheKey, data, ttl);
-		return data;
+	private buildWhereParams(where: Where, whereParams: WhereParams): any[] {
+		if (whereParams) return whereParams
+		if (!where) return []
+		if (typeof where === 'string') return []
+		if (Array.isArray(where) && typeof where[0] === 'string') return []
+		if (typeof where === 'object') return Object.values(where)
+		if (Array.isArray(where) && typeof where[0] === 'object') return where.flatMap(w => Object.values(w))
+		throw new Error('Invalid where type')
 	}
 
-	// SELECT u.firma, u.name, u.lastname, u.ceptel, u.email, i.name
-	// FROM user u
-	// 	LEFT JOIN iller i on u.sehir = i.name
 
-	private extractTableNames(fromClause: string): string[] {
-		// SQL anahtar kelimelerini küçük harfe çevir
-		const normalizedClause = fromClause.toLowerCase();
 
-		// Tablo adı ve alias'ı ayır (örn: "user u" -> "user")
-		const cleanedClause = normalizedClause.replace(/(\b\w+\b)\s+(?:as\s+)?([a-z])\b(?!\w)/g, '$1');
 
-		// JOIN koşullarını ve ON ifadelerini temizle
-		const withoutConditions = cleanedClause.replace(/\bon\b.*?(?=\b(left|right|inner|outer|cross)?\s*join\b|$)/g, ' ');
 
-		// JOIN kelimelerini boşlukla değiştir
-		const withoutJoins = withoutConditions.replace(/\b(left|right|inner|outer|cross)?\s*join\b/g, ' ');
 
-		// Tablo isimlerini ayır
-		const tables = withoutJoins
-			.split(/[\s,]+/)
-			.filter(part => part.length > 0)
-			.filter(part => !['on', 'using', 'as'].includes(part))
-			.map(table => table.trim());
-
-		return [...new Set(tables)];
-	}
 
 
 	async getJsonValue(table: string, where: string, jsonField: string, path: string = '*') {
@@ -340,6 +306,18 @@ class MariaDB {
 	async close(): Promise<void> {
 		await this.pool.end();
 	}
+
+	private getColumnDefs(meta: any[]): any[] {
+		if (!meta) return [];
+		return meta.map(column => {
+			return {
+				field: column.name(),
+				type: column.type,
+			};
+		});
+	}
+
+
 }
 // Singleton örneği oluştur
 export default new MariaDB();

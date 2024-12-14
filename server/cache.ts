@@ -17,12 +17,28 @@ interface CacheItem<T> {
     timeStamp: number
 }
 
+class CacheNode<T> {
+    key: string;
+    value: CacheItem<T>;
+    prev: CacheNode<T> | null;
+    next: CacheNode<T> | null;
+
+    constructor(key: string, value: CacheItem<T>) {
+        this.key = key;
+        this.value = value;
+        this.prev = null;
+        this.next = null;
+    }
+}
+
 export class Cache<T> {
-    private cache: Map<string, CacheItem<T>>;
+    private cache: Map<string, CacheNode<T>>;
     private currentSize: number
     private maxItemSize: number
     private maxTotalSize: number
     private defaultTTL: number
+    private head: CacheNode<T> | null
+    private tail: CacheNode<T> | null
 
     constructor() {
         this.cache = new Map();
@@ -30,6 +46,8 @@ export class Cache<T> {
         this.maxItemSize = 10 * 1024 * 1024; // varsayılan 10MB
         this.maxTotalSize = 300 * 1024 * 1024; // varsayılan 300MB
         this.defaultTTL = 300; // varsayılan 300 saniye
+        this.head = null;
+        this.tail = null;
     }
 
     public config(options?: { maxItemSizeMB?: number, maxTotalSizeMB?: number, defaultTTLSec?: number }): { maxItemSizeMB: number, maxTotalSizeMB: number, defaultTTLSec: number } {
@@ -65,50 +83,53 @@ export class Cache<T> {
 
         // Eski değeri varsa sil
         if (this.cache.has(key)) {
-            this.currentSize -= this.cache.get(key)!.size;
-            this.cache.delete(key);
+            this.currentSize -= this.cache.get(key)!.value.size;
+            this.removeNode(this.cache.get(key)!);
         }
 
         // Yeni değeri ekle
         const now = Date.now();
         const expiryTime = now + (ttl ?? this.defaultTTL) * 1000;
-        this.cache.set(key, {
+        const newNode = new CacheNode<T>(key, {
             value,
             size: valueSize,
             expiryTime,
             timeStamp: Math.floor(new Date(now).getTime() / 1000)
         });
+        this.cache.set(key, newNode);
+        this.addNodeToHead(newNode);
         this.currentSize += valueSize;
     }
 
     public get(key: string): T | null {
         this.removeExpired();
 
-        const item = this.cache.get(key);
-        if (!item) return null;
+        const node = this.cache.get(key);
+        if (!node) return null;
 
-        // LRU mantığı için değeri yeniden ekle
-        this.cache.delete(key);
-        this.cache.set(key, item);
+        // Düğümü başa taşı
+        this.removeNode(node);
+        this.addNodeToHead(node);
 
-        return item.value;
+        return node.value.value;
     }
 
     public getMeta(key: string): Partial<CacheItem<T>> | null {
         this.removeExpired();
         return {
-            timeStamp: this.cache.get(key)?.timeStamp,
-            expiryTime: this.cache.get(key)?.expiryTime,
-            size: this.cache.get(key)?.size,
+            timeStamp: this.cache.get(key)?.value.timeStamp,
+            expiryTime: this.cache.get(key)?.value.expiryTime,
+            size: this.cache.get(key)?.value.size,
         };
     }
 
 
     private removeExpired(): void {
         const now = Date.now();
-        for (const [key, item] of this.cache.entries()) {
-            if (item.expiryTime <= now) {
-                this.currentSize -= item.size;
+        for (const [key, node] of this.cache.entries()) {
+            if (node.value.expiryTime <= now) {
+                this.currentSize -= node.value.size;
+                this.removeNode(node);
                 this.cache.delete(key);
                 console.log('🗑️ src/lib/server/cache.ts 👉 106 👀 expired ➤ ', key);
             }
@@ -117,11 +138,12 @@ export class Cache<T> {
 
     private removeUntilFreeSpace(): void {
         while (this.currentSize > this.maxTotalSize && this.cache.size > 0) {
-            const firstKey = this.cache.keys().next().value;
-            const firstItem = this.cache.get(firstKey)!;
-            this.currentSize -= firstItem.size;
-            this.cache.delete(firstKey);
-            console.log('🗑️ src/lib/server/cache.ts 👉 110 👀 removed ➤ ', firstKey);
+            const tail = this.tail;
+            if (!tail) break;
+            this.currentSize -= tail.value.size;
+            this.removeNode(tail);
+            this.cache.delete(tail.key);
+            console.log('🗑️ src/lib/server/cache.ts 👉 110 👀 removed ➤ ', tail.key);
         }
     }
 
@@ -136,6 +158,35 @@ export class Cache<T> {
 
     public getSize(): number {
         return this.currentSize;
+    }
+
+    private removeNode(node: CacheNode<T>): void {
+        if (node.prev) {
+            node.prev.next = node.next;
+        } else {
+            this.head = node.next;
+        }
+
+        if (node.next) {
+            node.next.prev = node.prev;
+        } else {
+            this.tail = node.prev;
+        }
+    }
+
+    private addNodeToHead(node: CacheNode<T>): void {
+        node.next = this.head;
+        node.prev = null;
+
+        if (this.head) {
+            this.head.prev = node;
+        }
+
+        this.head = node;
+
+        if (!this.tail) {
+            this.tail = node;
+        }
     }
 }
 

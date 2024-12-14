@@ -1,41 +1,73 @@
 import jwt, { type JwtPayload } from 'jsonwebtoken';
+import { merge, set } from 'lodash-es';
 
-type SessionConfig = {
-	cookies: any,
-	cookieName: string,
-	secret: string,
-	expiresIn: string,
+interface Cookies {
+	set: (name: string, value: string, options: CookiesOptions) => void,
+	get: (name: string) => string | null,
+	delete: (name: string) => void
+}
+
+interface CookiesOptions {
 	path: string,
 	httpOnly: boolean,
 	secure: boolean,
 	maxAge: number
 }
 
-class SessionManager {
-	private sm: SessionConfig
+interface SessionConfig {
+	cookies?: Cookies | null;
+	cookieName: string;
+	secret: string;
+	expiresIn: string;
+	path: string;
+	httpOnly: boolean;
+	secure: boolean;
+	maxAge: number;
+}
 
-	constructor() {
-		this.sm = {
-			cookies: null,
-			cookieName: 'session_cookie',
-			secret: process.env.JWT_SECRET || 'secret',
-			expiresIn: '15m',
-			path: '/',
-			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
-			maxAge: 365 * 24 * 60 * 60 * 1000
-		}
-	}
+interface PayloadInterface {
+	payload: any;
+	expired: boolean;
+	error: Error | null | string;
+	exp: number;
+	iat: number;
+}
+
+class SessionManager {
+	private sm: SessionConfig = {
+		cookies: null,
+		cookieName: 'session_cookie',
+		secret: process.env.JWT_SECRET || 'secret',
+		expiresIn: '15m',
+		path: '/',
+		httpOnly: true,
+		secure: process.env.NODE_ENV === 'production',
+		maxAge: 365 * 24 * 60 * 60 * 1000
+	};
+
+	constructor() { }
 
 	config(config: { cookies?: any, cookieName?: string, secret?: string, expiresIn?: string, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number }): void {
 		this.sm = { ...this.sm, ...config };
 	}
 
 	checkConfig() {
-		if (!this.sm.cookies || !this.sm.cookieName || !this.sm.secret) throw new Error('Invalid session config');
+		if (!this.sm.cookies) throw new Error('Invalid session config');
 	}
 
-	async setToken(data: any, options?: { cookieName?: string, expiresIn?: string, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number }): Promise<boolean> {
+	/**
+	 * @method setToken
+	 * @param data - The data to be encoded into the token.
+	 * @param options - The options for the token.
+	 * @param options.cookieName - The name of the cookie.
+	 * @param options.expiresIn - The expiration time of the token.
+	 * @param options.path - The path of the cookie.
+	 * @param options.httpOnly - Whether the cookie is HTTP only.
+	 * @param options.secure - Whether the cookie is secure.
+	 * @param options.maxAge - The maximum age of the cookie.
+	 * @returns A promise that resolves to a boolean indicating the success of the operation.
+	 */
+	async setToken(data: any, options: { cookieName?: string, expiresIn?: string, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number } = {}): Promise<boolean> {
 		this.checkConfig();
 		delete data?.exp;
 		delete data?.iat;
@@ -49,7 +81,13 @@ class SessionManager {
 		return true;
 	}
 
-	async getToken(cookieName?: string, callback?: () => Promise<boolean>): Promise<{ payload: any, expired: boolean, error: Error | null | string }> {
+	/**
+	 * @method getToken
+	 * @param [cookieName] - The name of the cookie.
+	 * @param [callback] - The callback function to be called if the token is expired which returns true if the token should be refreshed
+	 * @returns A promise that resolves to an object containing the payload, expired status, and error.
+	 */
+	async getToken(cookieName?: string, callback?: () => Promise<boolean>): Promise<PayloadInterface> {
 		this.checkConfig();
 		const cookie = this.sm.cookies?.get(cookieName || this.sm.cookieName);
 		if (!cookie) return this.returnPayload(null, false, 'Cookie not found');
@@ -57,33 +95,26 @@ class SessionManager {
 			const payload = jwt.verify(cookie, this.sm.secret);
 			return this.returnPayload(payload, false, null);
 		} catch (error) {
-			// Eğer jwt expired ise callback çağrılır, callback true dönerse token yenilenir
 			if (error instanceof jwt.TokenExpiredError) {
-				console.log('📂 src/lib/server/session.ts 👉 60 👀  ➤ jwt expired');
 				let payload = jwt.decode(cookie) as JwtPayload;
 				if (callback) {
-					if (await callback()) {
-						await this.setToken(payload);
-						return this.returnPayload(payload, false, null);
-					} else {
-						return this.returnPayload(payload, true, null);
+					try {
+						if (await callback()) {
+							await this.setToken(payload);
+							return this.returnPayload(payload, false, null);
+						}
+					} catch (error) {
 					}
-				} else {
-					return this.returnPayload(payload, true, null);
 				}
+				return this.returnPayload(payload, true, null);
 			}
-			return this.returnPayload(null, false, error.message);
-			;
+			return this.returnPayload(null, false, error instanceof Error ? error.message : 'Unknown error');
 		}
 	}
 
-	async updateToken(newPayload: any): Promise<{ payload: any, expired: boolean, error: Error | null }> {
-		this.checkConfig();
+	async updateToken(newPayload: any): Promise<PayloadInterface> {
 		const { payload } = await this.getToken();
-		if (!payload) return this.returnPayload(null, false, 'Cookie not found');
-		delete payload.exp;
-		delete payload.iat;
-		const mergedPayload = { ...payload, ...newPayload };
+		const mergedPayload = merge(payload, newPayload);
 		await this.setToken(mergedPayload);
 		return this.returnPayload(mergedPayload, false, null);
 	}
@@ -100,11 +131,12 @@ class SessionManager {
 		return true;
 	}
 
-	private returnPayload(payload: any, expired: boolean = false, error: Error | null | string = null): any {
-		let returnPayload = { payload, expired, error, exp: payload?.exp, iat: payload?.iat };
-		delete returnPayload?.payload?.exp;
-		delete returnPayload?.payload?.iat;
-		return returnPayload;
+	private returnPayload(payload: any, expired: boolean = false, error: Error | null | string = null): { payload: any, expired: boolean, error: Error | null | string, exp: number, iat: number } {
+		const exp = payload?.exp;
+		const iat = payload?.iat;
+		delete payload?.exp;
+		delete payload?.iat;
+		return { payload, expired, error, exp, iat };
 	}
 }
 

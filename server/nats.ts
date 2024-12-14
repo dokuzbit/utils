@@ -59,7 +59,6 @@ class NatsWrapper {
 		return this.jc.decode(response.data);
 	}
 
-	// TODO: Tüm testleri aynı anda çalıştırınca hata veriyor.
 	async subscribe(subject: string, callback: (data: any) => void): Promise<Subscription> {
 		if (!this.nc) await this.connect();
 		const subscription = this.nc!.subscribe(subject);
@@ -78,13 +77,12 @@ class NatsWrapper {
 	}
 
 	async unsubscribe(subscription: Subscription): Promise<void> {
-		await this.nc!.drain();
+		await subscription.drain();
 		subscription.unsubscribe();
 	}
 
 	async disconnect(): Promise<void> {
 		if (this.nc) {
-			await this.nc.drain();
 			await this.nc.close();
 			this.nc = null;
 			console.log('NATS bağlantısı kapatıldı');
