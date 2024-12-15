@@ -58,7 +58,6 @@ class MariaDB {
 		this.dbConfig = merge(this.dbConfig, dbConfig);
 		this.dbConfig.trace = dbConfig.trace || process.env.NODE_ENV === 'development';
 		this.dbConfig.connectionLimit = dbConfig.connectionLimit || 5;
-		// this.dbConfig.metaAsArray = dbConfig.metaAsArray || false;
 		if (!this.dbConfig || !this.dbConfig.host || !this.dbConfig.database || !this.dbConfig.user || !this.dbConfig.password) throw new Error('database, user and password are required');
 		this.pool = createPool(this.dbConfig);
 	}
@@ -74,7 +73,9 @@ class MariaDB {
 		if (chunk !== undefined) command = 'findAll'
 
 		whereParams = this.buildWhereParams(where, whereParams)
+		console.log(where);
 		where = this.buildWhere(where)
+		console.log(where);
 		select = typeof select === 'string' ? select : select.join(',');
 		join = typeof join === 'string' ? [join] : join;
 		limit = command === 'findFirst' ? 1 : limit ? limit : 1000;
@@ -98,7 +99,7 @@ class MariaDB {
 			case 'findMany':
 			case 'findAll':
 				let sql = `SELECT ${select} FROM ${from}`;
-				if (where) sql += ` WHERE ${where}` + command === 'findFirst' ? ' LIMIT 1' : '';
+				if (where) sql += ` WHERE ${where}`;
 				if (order) sql += ` ORDER BY ${order}`;
 				if (group) sql += ` GROUP BY ${group}`;
 				if (chunk !== undefined) {
@@ -109,8 +110,9 @@ class MariaDB {
 					if (order) sql += ` ORDER BY ${order}`;
 					if (group) sql += ` GROUP BY ${group}`;
 				} else {
-					if (limit) sql += ` LIMIT ${limit}`;
-					if (offset) sql += ` OFFSET ${offset}`;
+					// NOTE: need space after limit. We check for if includes 'limit 1 ' with one space to avoid confusion with 'limit 10'
+					if (limit) sql += ` LIMIT ${limit} `;
+					if (offset) sql += `OFFSET ${offset}`;
 				}
 				try {
 					return await this.query(sql, whereParams);
@@ -196,11 +198,12 @@ class MariaDB {
 	public async query(sql: string | QueryOptions, values?: any, params: Record<string, any>[] = []): Promise<any> {
 		if (!this.pool) return { error: 'pool is not initialized' };
 		if (params.length > 0 && typeof sql === 'string') sql = { sql: sql, ...params }
-		if (process.env.NODE_ENV === 'test') console.log(sql, values);
-		const result = await this.pool.query(sql, values);
-		if (this.dbConfig?.rowsAsArray && result.meta) result.meta = this.getColumnDefs(result.meta);
-		if(typeof sql === 'string' && sql.toLowerCase().includes('limit 1')) return result[0]
-		if(typeof sql === 'object' && sql.sql.toLowerCase().includes('limit 1')) return result[0]
+		let result = await this.pool.query(sql, values);
+		if(result.length === 1){
+			if(typeof sql === 'string' && (sql.toLowerCase().includes('limit 1 ') || sql.toLowerCase().endsWith('limit 1'))) return result[0]
+			if(typeof sql === 'object' && (sql.sql.toLowerCase().includes('limit 1 ') || sql.sql.toLowerCase().endsWith('limit 1'))) return result[0]
+		}
+		if (result.meta) result.meta = this.getColumnDefs(result.meta);
 		return result
 	}
 

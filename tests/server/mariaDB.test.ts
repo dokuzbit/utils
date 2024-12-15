@@ -28,36 +28,46 @@ const initSql = [
         create_time DATETIME COMMENT 'Create Time',
         master_id int,
         data JSON,
-        FOREIGN KEY (master_id) REFERENCES test (id));`
+        FOREIGN KEY (master_id) REFERENCES test (id));`,
+    `use test;`
 ];
 
 
 test('setup db', async () => {
     for (const sql of initSql) {
-        await db.execute(sql);
+        await db.query(sql);
     }
 });
 
+test('query', async () => {
+    await db.query('use test')
+    await db.insert(TABLE1, { name: 'testQuery'})
+    const result = await db.query('SELECT * FROM test where name = ?', ['testQuery']);
+    expect(result).toBeDefined();
+    expect(result.length).toBeGreaterThanOrEqual(1);
+});
 
 test('getFirst', async () => {
+    await db.execute('use test')
     await db.insert(TABLE1, { name: 'test1', data: { color: 'white', size: 'M' } });
-    let result = await db.select({ from: TABLE1, where: 'name = ?', whereParams: ['test1'] });
+    const result = await db.select({ from: TABLE1, where: 'name = ?', whereParams: ['test1'] });
     expect(result).toBeDefined();
     expect(result.name).toBe('test1');
-    result = await db.select({ from: TABLE1, where: { name: 'test1' } });
-    expect(result).toBeDefined();
-    expect(result.name).toBe('test1');
+    const result2 = await db.select({ from: TABLE1, where: { name: 'test1' } });
+    expect(result2).toBeDefined();
+    expect(result2.name).toBe('test1');
 });
 
 test('getMany', async () => {
+    await db.execute('use test')
     await db.insert(TABLE1, [{ name: 'test2', data: { color: 'white', size: 'M' } }, { name: 'test3', data: { color: 'black', size: 'L' } }]);
     const result = await db.select({ from: TABLE1, where: 'name LIKE ?', whereParams: ['test%'], limit: 10 });
-    console.log(result);
     expect(result).toBeDefined();
     expect(result.length).toBeGreaterThan(1);
 });
 
 test('getRelated', async () => {
+    await db.execute('use test')
     await db.delete(TABLE2, '1 = 1');
     await db.delete(TABLE1, '1 = 1');
     const result1 = await db.insert(TABLE1, { name: 'test1', data: { color: 'white', size: 'M' } });
@@ -74,19 +84,21 @@ test('getRelated', async () => {
 });
 
 test('insert', async () => {
+    await db.execute('use test')
     const result = await db.insert(TABLE1, { name: 'test1', data: { color: 'white', size: 'M' } });
     expect(result).toBeDefined();
     expect(result.affectedRows).toBe(1);
 });
 
 test('batch insert', async () => {
+    await db.execute('use test')
     const result = await db.insert(TABLE1, [{ name: 'test2', data: { color: 'white', size: 'M' } }, { name: 'test3', data: { color: 'black', size: 'L' } }]);
     expect(result).toBeDefined();
     expect(result.affectedRows).toBe(2);
 });
 
 test('update', async () => {
-    db.execute('use test')
+    await db.execute('use test')
     await db.insert(TABLE1, { name: 'test1', data: { color: 'white', size: 'M' } });
     const result1 = await db.update({ table: TABLE1, values: { name: 'test2' }, where: 'name = "test1"' });
     const result2 = await db.update({ table: TABLE1, values: { name: 'test3' }, where: ['name = "test2"', 'id > 1'] });
