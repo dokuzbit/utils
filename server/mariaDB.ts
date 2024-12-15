@@ -98,7 +98,7 @@ class MariaDB {
 			case 'findMany':
 			case 'findAll':
 				let sql = `SELECT ${select} FROM ${from}`;
-				if (where) sql += ` WHERE ${where}`;
+				if (where) sql += ` WHERE ${where}` + command === 'findFirst' ? ' LIMIT 1' : '';
 				if (order) sql += ` ORDER BY ${order}`;
 				if (group) sql += ` GROUP BY ${group}`;
 				if (chunk !== undefined) {
@@ -113,8 +113,7 @@ class MariaDB {
 					if (offset) sql += ` OFFSET ${offset}`;
 				}
 				try {
-					const result = await this.query(sql, whereParams);
-					return command === 'findFirst' && !result.data ? result[0] : result;
+					return await this.query(sql, whereParams);
 				} catch (error: any) {
 					return { error };
 				}
@@ -199,7 +198,9 @@ class MariaDB {
 		if (params.length > 0 && typeof sql === 'string') sql = { sql: sql, ...params }
 		if (process.env.NODE_ENV === 'test') console.log(sql, values);
 		const result = await this.pool.query(sql, values);
-		if (result.meta) result.meta = this.getColumnDefs(result.meta);
+		if (this.dbConfig?.rowsAsArray && result.meta) result.meta = this.getColumnDefs(result.meta);
+		if(typeof sql === 'string' && sql.toLowerCase().includes('limit 1')) return result[0]
+		if(typeof sql === 'object' && sql.sql.toLowerCase().includes('limit 1')) return result[0]
 		return result
 	}
 
