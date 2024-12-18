@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import nats from '../../server/nats';
+import nats from '../../server/nats.server';
 
 const { NATS_URL, NATS_USER, NATS_PASS } = process.env;
 

@@ -23,22 +23,51 @@ class Api {
 		globalApiBaseUrl = url;
 	};
 
-	public fetch = async <T>(url: string, payload: any = ''): Promise<{ result: T | null; error: any }> => {
-		const query = typeof payload === 'string' ? '?' + payload : '';
-		console.log(`URL: ${globalApiBaseUrl}${url}${query}`);
-		console.log(typeof payload === 'object' ? 'POST' : 'GET');
+	private request = async <T>(
+		url: string,
+		method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
+		payload: any = null
+	): Promise<{ result: T | null; error: any }> => {
+		const options: RequestInit = {
+			method: method,
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: payload ? JSON.stringify(payload) : null,
+		};
+
 		try {
-			const result = await fetch(`${globalApiBaseUrl}${url}${query}`, {
-				method: typeof payload === 'object' ? 'POST' : 'GET',
-				body: typeof payload === 'object' ? JSON.stringify(payload) : null,
-			});
+			const result = await fetch(`${globalApiBaseUrl}${url}`, options);
 			if (result.ok) {
 				return { result: await result.json(), error: null };
 			}
 			return { result: null, error: { status: result.status, statusText: result.statusText } };
 		} catch (err: unknown) {
-			return { result: null, error: err instanceof Error ? { error: { name: err.name, message: err.message } } : 'Unknown error' };
+			return {
+				result: null,
+				error: err instanceof Error ? { name: err.name, message: err.message } : 'Bilinmeyen hata',
+			};
 		}
+	};
+
+	public get = async <T>(url: string): Promise<{ result: T | null; error: any }> => {
+		return this.request<T>(url, 'GET');
+	};
+
+	public post = async <T>(url: string, payload: any): Promise<{ result: T | null; error: any }> => {
+		return this.request<T>(url, 'POST', payload);
+	};
+
+	public put = async <T>(url: string, payload: any): Promise<{ result: T | null; error: any }> => {
+		return this.request<T>(url, 'PUT', payload);
+	};
+
+	public delete = async <T>(url: string): Promise<{ result: T | null; error: any }> => {
+		return this.request<T>(url, 'DELETE');
+	};
+
+	public patch = async <T>(url: string, payload: any): Promise<{ result: T | null; error: any }> => {
+		return this.request<T>(url, 'PATCH', payload);
 	};
 }
 

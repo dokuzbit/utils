@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import session from '../../server/session';
+import session from '../../server/session.server';
 
 const mockCookies = {
     cookies: {},

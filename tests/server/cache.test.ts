@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import cache from '../../server/cache';
+import cache from '../../server/cache.server';
 
 test('cache', async () => {
     cache.set('test', 'test');

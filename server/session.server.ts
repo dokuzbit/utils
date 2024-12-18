@@ -33,7 +33,7 @@ interface PayloadInterface {
 	iat: number;
 }
 
-class SessionManager {
+class Session {
 	private sm: SessionConfig = {
 		cookies: null,
 		cookieName: 'session_cookie',
@@ -140,4 +140,4 @@ class SessionManager {
 	}
 }
 
-export default new SessionManager();
+export default new Session;

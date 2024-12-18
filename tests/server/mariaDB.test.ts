@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import db from '../../server/mariaDB';
+import db from '../../server/mariadb.server';
 import { merge } from 'lodash';
 import type { TypeCastResult, UpsertResult } from 'mariadb';
 
@@ -41,7 +41,7 @@ test('setup db', async () => {
 
 test('query', async () => {
     await db.query('use test')
-    await db.insert(TABLE1, { name: 'testQuery'})
+    await db.insert(TABLE1, { name: 'testQuery' })
     const result = await db.query('SELECT * FROM test where name = ?', ['testQuery']);
     expect(result).toBeDefined();
     expect(result.length).toBeGreaterThanOrEqual(1);

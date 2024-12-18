@@ -1,6 +1,6 @@
 import { createPool } from 'mariadb';
 import type { Pool, PoolConnection, QueryOptions, UpsertResult } from 'mariadb';
-import cache from './cache';
+import cache from './cache.server';
 import { merge } from 'lodash-es';
 
 
@@ -59,7 +59,7 @@ class MariaDB {
 		this.dbConfig.trace = dbConfig.trace || process.env.NODE_ENV === 'development';
 		this.dbConfig.connectionLimit = dbConfig.connectionLimit || 5;
 		if (!this.dbConfig || !this.dbConfig.host || !this.dbConfig.database || !this.dbConfig.user || !this.dbConfig.password) throw new Error('database, user and password are required');
-		this.pool = createPool(this.dbConfig);
+		if (!this.pool) this.pool = createPool(this.dbConfig);
 	}
 
 	// TODO: implement asArray
@@ -199,9 +199,9 @@ class MariaDB {
 		if (!this.pool) return { error: 'pool is not initialized' };
 		if (params.length > 0 && typeof sql === 'string') sql = { sql: sql, ...params }
 		let result = await this.pool.query(sql, values);
-		if(result.length === 1){
-			if(typeof sql === 'string' && (sql.toLowerCase().includes('limit 1 ') || sql.toLowerCase().endsWith('limit 1'))) return result[0]
-			if(typeof sql === 'object' && (sql.sql.toLowerCase().includes('limit 1 ') || sql.sql.toLowerCase().endsWith('limit 1'))) return result[0]
+		if (result.length === 1) {
+			if (typeof sql === 'string' && (sql.toLowerCase().includes('limit 1 ') || sql.toLowerCase().endsWith('limit 1'))) return result[0]
+			if (typeof sql === 'object' && (sql.sql.toLowerCase().includes('limit 1 ') || sql.sql.toLowerCase().endsWith('limit 1'))) return result[0]
 		}
 		if (result.meta) result.meta = this.getColumnDefs(result.meta);
 		return result
@@ -308,7 +308,7 @@ class MariaDB {
 
 
 	async close(): Promise<void> {
-		await this.pool.end();
+		if (this.pool) await this.pool.end();
 	}
 
 	private getColumnDefs(meta: any[]): any[] {
