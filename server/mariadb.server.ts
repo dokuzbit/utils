@@ -19,6 +19,7 @@ interface dbConfig {
 	namedPlaceholders?: boolean;
 	rowsAsArray?: boolean;
 	nestTables?: boolean;
+	bigIntAsNumber?: boolean;
 }
 interface QueryParams {
 	command?: 'findFirst' | 'findMany' | 'findAll';
@@ -73,9 +74,7 @@ class MariaDB {
 		if (chunk !== undefined) command = 'findAll'
 
 		whereParams = this.buildWhereParams(where, whereParams)
-		console.log(where);
 		where = this.buildWhere(where)
-		console.log(where);
 		select = typeof select === 'string' ? select : select.join(',');
 		join = typeof join === 'string' ? [join] : join;
 		limit = command === 'findFirst' ? 1 : limit ? limit : 1000;

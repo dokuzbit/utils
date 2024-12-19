@@ -38,7 +38,7 @@ class Session {
 		cookies: null,
 		cookieName: 'session_cookie',
 		secret: process.env.JWT_SECRET || 'secret',
-		expiresIn: '15m',
+		expiresIn: process.env.NODE_ENV === 'debug' ? '1m' : '15m',
 		path: '/',
 		httpOnly: true,
 		secure: process.env.NODE_ENV === 'production',
@@ -87,7 +87,7 @@ class Session {
 	 * @param [callback] - The callback function to be called if the token is expired which returns true if the token should be refreshed
 	 * @returns A promise that resolves to an object containing the payload, expired status, and error.
 	 */
-	async getToken(cookieName?: string, callback?: () => Promise<boolean>): Promise<PayloadInterface> {
+	async getToken(cookieName?: string, callback?: (payload: any) => Promise<boolean>): Promise<PayloadInterface> {
 		this.checkConfig();
 		const cookie = this.sm.cookies?.get(cookieName || this.sm.cookieName);
 		if (!cookie) return this.returnPayload(null, false, 'Cookie not found');
@@ -99,7 +99,7 @@ class Session {
 				let payload = jwt.decode(cookie) as JwtPayload;
 				if (callback) {
 					try {
-						if (await callback()) {
+						if (await callback(payload)) {
 							await this.setToken(payload);
 							return this.returnPayload(payload, false, null);
 						}
