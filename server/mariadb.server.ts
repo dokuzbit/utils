@@ -150,7 +150,7 @@ class MariaDB {
 		whereParams = this.buildWhereParams(where, whereParams)
 		where = this.buildWhere(where)
 		const sql = `UPDATE ${table} SET ${Object.keys(values[0])
-			.map((key) => `${key} = ?`)
+			.map((key) => '`' + key + '` = ?')
 			.join(',')} WHERE ${where}`;
 		let placeholders = values.flatMap(Object.values)
 		return await this.query(sql, [...placeholders, ...whereParams]);
@@ -159,15 +159,23 @@ class MariaDB {
 	// DONE: insert single or batch
 	async insert<T>(table: string, values: Record<string, any> | Record<string, any>[]): Promise<any> {
 		if (Array.isArray(values)) {
-			const sql = `INSERT INTO ${table} (${Object.keys(values[0]).join(',')}) VALUES ${values
-				.map(() => `(${Object.keys(values[0]).map(() => `?`).join(',')})`)
-				.join(', ')}`;
+			let sql = `INSERT INTO ${table} (${Object.keys(values[0])
+				.map((key) => '`' + key + '`')
+				.join(',')}) VALUES ${values
+					.map((values) => `(${Object.keys(values[0]).map(() => `?`).join(',')})`)
+					.join(', ')}`;
 			const params = values.flatMap(Object.values);
+			// TODO: daha iyi bir çözüm bul
+			// replace ,not with ,`not`
+			sql = sql.replace(/,not/g, ',`not`');
 			return await this.batch(sql, params);
 		} else {
-			const sql = `INSERT INTO ${table} (${Object.keys(values).join(',')}) VALUES (${Object.keys(values)
+			let sql = `INSERT INTO ${table} (${Object.keys(values).join(',')}) VALUES (${Object.keys(values)
 				.map((key) => `?`)
 				.join(',')})`;
+			// TODO: daha iyi bir çözüm bul
+			// replace ,not with ,`not`
+			sql = sql.replace(/,not/g, ',`not`');
 			return await this.query(sql, Object.values(values));
 		}
 	}
