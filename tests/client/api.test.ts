@@ -11,6 +11,8 @@ test('api GET', async () => {
 test('api GET Error', async () => {
     api.setBaseUrl('https://jsonplaceholder.typicode.com/2');
     const getResult = await api.get('posts/1');
+    console.log(getResult);
+
     expect(getResult.result).toBeNull();
     expect(getResult.error).toBeDefined();
 });

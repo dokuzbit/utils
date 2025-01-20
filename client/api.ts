@@ -41,11 +41,12 @@ class Api {
 			if (result.ok) {
 				return { result: await result.json(), error: null };
 			}
-			return { result: null, error: { status: result.status, statusText: result.statusText } };
+			const message = await result.json();
+			return { result: null, error: { status: result.status, statusText: result.statusText, message: message } };
 		} catch (err: unknown) {
 			return {
 				result: null,
-				error: err instanceof Error ? { name: err.name, message: err.message } : 'Bilinmeyen hata',
+				error: err instanceof Error ? { name: err.name, code: err.code, cause: err.cause, message: err.message } : 'Bilinmeyen hata',
 			};
 		}
 	};
