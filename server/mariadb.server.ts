@@ -159,14 +159,19 @@ class MariaDB {
 	// DONE: insert single or batch
 	async insert<T>(table: string, values: Record<string, any> | Record<string, any>[]): Promise<any> {
 		if (Array.isArray(values)) {
+			console.log(values);
+
 			let sql = `INSERT INTO ${table} (${Object.keys(values[0])
 				.map((key) => '`' + key + '`')
 				.join(',')}) VALUES ${values
 					.map((values) => `(${Object.keys(values[0]).map(() => `?`).join(',')})`)
 					.join(', ')}`;
+
 			const params = values.flatMap(Object.values);
+
 			// TODO: daha iyi bir çözüm bul
-			// replace ,not with ,`not`
+
+			// replace ,not with ,`not` as not is a reserved word
 			sql = sql.replace(/,not/g, ',`not`');
 			return await this.batch(sql, params);
 		} else {

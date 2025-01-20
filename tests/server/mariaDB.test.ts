@@ -90,9 +90,10 @@ test('insert', async () => {
     expect(result.affectedRows).toBe(1);
 });
 
-test('batch insert', async () => {
+test('batch', async () => {
     await db.execute('use test')
     const result = await db.insert(TABLE1, [{ name: 'test2', data: { color: 'white', size: 'M' } }, { name: 'test3', data: { color: 'black', size: 'L' } }]);
+    console.log(result);
     expect(result).toBeDefined();
     expect(result.affectedRows).toBe(2);
 });

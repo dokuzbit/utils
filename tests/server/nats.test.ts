@@ -30,7 +30,6 @@ test('nats pub/sub loop', async () => {
             cancel();
         } else {
             count++;
-            console.log('count', count);
         }
     });
 
