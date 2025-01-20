@@ -4,7 +4,7 @@ import { merge, set } from 'lodash-es';
 interface Cookies {
 	set: (name: string, value: string, options: CookiesOptions) => void,
 	get: (name: string) => string | null,
-	delete: (name: string) => void
+	delete: (name: string, options?: { path?: string }) => void
 }
 
 interface CookiesOptions {
@@ -125,9 +125,9 @@ class Session {
 		return true;
 	}
 
-	async deleteToken(cookieName?: string): Promise<boolean> {
+	async deleteToken(cookieName?: string, cookiePath?: string): Promise<boolean> {
 		this.checkConfig();
-		this.sm.cookies?.delete(cookieName || this.sm.cookieName);
+		this.sm.cookies?.delete(cookieName || this.sm.cookieName, { path: cookiePath || this.sm.path });
 		return true;
 	}
 
