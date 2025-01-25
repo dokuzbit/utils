@@ -6,7 +6,7 @@ interface Provider {
     code: string;
 }
 
-class Auth {
+export class Auth {
     async callback(provider: Provider) {
         switch (provider.name) {
             case 'google':
@@ -40,10 +40,6 @@ class Auth {
                     });
 
                     const userData = await userResponse.json();
-
-                    console.log("userData", userData);
-
-
                     if (!userData.email) {
                         throw new Error('Kullanıcı bilgileri alınamadı');
                     }
@@ -54,13 +50,10 @@ class Auth {
                     console.error('Google auth hatası:', err);
                     throw new Error('Google ile giriş yapılırken bir hata oluştu');
                 }
-
-
-
-
                 break;
         }
     }
 }
 
-export default new Auth();
+export const auth = new Auth();
+export default auth;

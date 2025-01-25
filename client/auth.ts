@@ -5,7 +5,7 @@ interface Provider {
 }
 
 
-class Auth {
+export class Auth {
     login(provider: Provider) {
         switch (provider.name) {
             case 'google':
@@ -21,4 +21,5 @@ class Auth {
     }
 }
 
-export default new Auth();
+export const auth = new Auth();
+export default auth;

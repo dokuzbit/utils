@@ -48,7 +48,7 @@ interface UpdateParams {
 
 
 
-class MariaDB {
+export class MariaDB {
 	private pool: Pool | undefined;
 	private dbConfig: dbConfig | undefined;
 	private cache: typeof cache = cache;
@@ -335,5 +335,5 @@ class MariaDB {
 
 
 }
-// Singleton örneği oluştur
-export default new MariaDB();
+export const mariadb = new MariaDB();
+export default mariadb;

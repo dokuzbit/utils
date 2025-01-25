@@ -10,7 +10,7 @@ import type { NatsConnection, Subscription, PublishOptions, RequestOptions } fro
  * @method disconnect: NATS bağlantısını kapatma
  */
 
-class NatsWrapper {
+export class NatsWrapper {
 	private nc: NatsConnection | null = null;
 	private jc = JSONCodec();
 	private sc = StringCodec();
@@ -90,4 +90,5 @@ class NatsWrapper {
 	}
 }
 
-export default new NatsWrapper();
+export const nats = new NatsWrapper();
+export default nats;

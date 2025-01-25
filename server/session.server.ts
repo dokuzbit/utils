@@ -33,7 +33,7 @@ interface PayloadInterface {
 	iat: number;
 }
 
-class Session {
+export class Session {
 	private sm: SessionConfig = {
 		cookies: null,
 		cookieName: 'session_cookie',
@@ -139,5 +139,5 @@ class Session {
 		return { payload, expired, error, exp, iat };
 	}
 }
-
-export default new Session;
+export const session = new Session;
+export default session;

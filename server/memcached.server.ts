@@ -19,7 +19,7 @@ import * as memjs from 'memjs';
  * @returns {Promise<any>} - The result of the delete operation
  *
  */
-class Memcached {
+export class Memcached {
 	private cache: Record<string, { value: any; expires: number }> = {};
 	private memcached: any;
 	private readonly DEFAULT_EXPIRATION = 300; // Saniye cinsinden varsayılan sona erme süresi
@@ -66,4 +66,5 @@ class Memcached {
 	}
 }
 
-export default new Memcached();
+export const memcached = new Memcached();
+export default memcached;

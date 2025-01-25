@@ -31,7 +31,7 @@ class CacheNode<T> {
     }
 }
 
-class Cache<T> {
+export class Cache<T> {
     private cache: Map<string, CacheNode<T>>;
     private currentSize: number
     private maxItemSize: number
@@ -190,4 +190,6 @@ class Cache<T> {
     }
 }
 
-export default new Cache<any>();
+export const cache = new Cache<any>();
+export default cache;
+

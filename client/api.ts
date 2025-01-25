@@ -13,7 +13,7 @@
 let base = ''
 let globalApiBaseUrl: string = base;
 
-class Api {
+export class Api {
 	private baseUrl: string;
 	constructor(baseUrl: string = '') {
 		this.baseUrl = baseUrl;
@@ -72,4 +72,5 @@ class Api {
 	};
 }
 
-export default new Api();
+export const api = new Api();
+export default api;
