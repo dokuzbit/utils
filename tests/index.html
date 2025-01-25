@@ -1,0 +1,19 @@
+<h1>Hello World</h1>
+
+<button id="loginBtn">Login</button>
+
+<script type="module">
+  import Auth from "./auth.ts";
+
+  function login() {
+    console.log("login");
+    console.log(process.env.AUTH_GOOGLE_ID);
+    Auth.login({
+      name: "google",
+      clientId: process.env.AUTH_GOOGLE_ID,
+      redirectUri: "http://localhost:3000/ces/login/google",
+    });
+  }
+
+  document.getElementById("loginBtn").addEventListener("click", login);
+</script>
