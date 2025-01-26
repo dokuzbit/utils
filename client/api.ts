@@ -12,6 +12,12 @@
 
 let base = ''
 let globalApiBaseUrl: string = base;
+interface Response<T> {
+	result: T | null;
+	error?: any;
+	status?: number;
+	ok?: boolean;
+}
 
 export class Api {
 	private baseUrl: string;
@@ -27,7 +33,7 @@ export class Api {
 		url: string,
 		method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
 		payload: any = null
-	): Promise<{ result: T | null; error: any }> => {
+	): Promise<Response<T>> => {
 		const options: RequestInit = {
 			method: method,
 			headers: {
@@ -39,35 +45,37 @@ export class Api {
 		try {
 			const result = await fetch(`${globalApiBaseUrl}${url}`, options);
 			if (result.ok) {
-				return { result: await result.json(), error: null };
+				return { result: await result.json(), error: null, status: result.status, ok: result.ok };
 			}
 			const message = await result.json();
-			return { result: null, error: { status: result.status, statusText: result.statusText, message: message } };
+			return { result: null, error: message, status: result.status, ok: result.ok };
 		} catch (err: unknown) {
 			return {
 				result: null,
 				error: err instanceof Error ? { name: err.name, code: err.code, cause: err.cause, message: err.message } : 'Bilinmeyen hata',
+				status: 500,
+				ok: false,
 			};
 		}
 	};
 
-	public get = async <T>(url: string): Promise<{ result: T | null; error: any }> => {
+	public get = async <T>(url: string): Promise<Response<T>> => {
 		return this.request<T>(url, 'GET');
 	};
 
-	public post = async <T>(url: string, payload: any): Promise<{ result: T | null; error: any }> => {
+	public post = async <T>(url: string, payload: any): Promise<Response<T>> => {
 		return this.request<T>(url, 'POST', payload);
 	};
 
-	public put = async <T>(url: string, payload: any): Promise<{ result: T | null; error: any }> => {
+	public put = async <T>(url: string, payload: any): Promise<Response<T>> => {
 		return this.request<T>(url, 'PUT', payload);
 	};
 
-	public delete = async <T>(url: string): Promise<{ result: T | null; error: any }> => {
+	public delete = async <T>(url: string): Promise<Response<T>> => {
 		return this.request<T>(url, 'DELETE');
 	};
 
-	public patch = async <T>(url: string, payload: any): Promise<{ result: T | null; error: any }> => {
+	public patch = async <T>(url: string, payload: any): Promise<Response<T>> => {
 		return this.request<T>(url, 'PATCH', payload);
 	};
 }
