@@ -4,7 +4,7 @@ import api from '../../client/api';
 test('api GET', async () => {
     api.setBaseUrl('https://jsonplaceholder.typicode.com/');
     const getResult = await api.get('posts/1');
-    expect(getResult.result).toBeObject();
+    expect(getResult.data).toBeObject();
     expect(getResult.error).toBeNull();
 });
 
@@ -13,7 +13,7 @@ test('api GET Error', async () => {
     const getResult = await api.get('posts/1');
     console.log(getResult);
 
-    expect(getResult.result).toBeNull();
+    expect(getResult.data).toBeNull();
     expect(getResult.error).toBeDefined();
 });
 
@@ -25,6 +25,6 @@ test('api POST', async () => {
         body: 'test'
     });
 
-    expect(postResult.result).toBeObject();
+    expect(postResult.data).toBeObject();
     expect(postResult.error).toBeNull();
 });
