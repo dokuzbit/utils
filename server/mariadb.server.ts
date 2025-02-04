@@ -20,6 +20,7 @@ interface dbConfig {
 	rowsAsArray?: boolean;
 	nestTables?: boolean;
 	bigIntAsNumber?: boolean;
+	dateStrings?: boolean;
 }
 interface QueryParams {
 	command?: 'findFirst' | 'findMany' | 'findAll';
