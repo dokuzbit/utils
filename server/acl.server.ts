@@ -123,7 +123,7 @@ export class ACL {
                     .find(([_, value]) => value === attr)?.[0]
             ).filter(Boolean);
 
-            return requiredAttributes.every(attr => permAttributes.includes(attr))
+            return requiredAttributes.every(attr => permAttributes.includes(attr || ''))
                 && permAttributes.length === requiredAttributes.length;
         });
     }
