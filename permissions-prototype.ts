@@ -1,55 +1,47 @@
-// Veirtabanında saklanacak alanlar
-// user.roles = 'admin, superAdmin, user'
-// user.permissions = 'usc, usr, by*'
-// sec_roles.name = 'admin'
-// sec_roles.permissions = 'usr, usw, usd'
-// sonra bunları build permissions ile birleştirip csv olarak jwt ye ekleyeceğim
-// sveltekit sunucu cacheleyecek şekilde bir tablo oluşturacak ve load ile client e geçirecek
-// client ve server da checkPermission bu tabloyu kullanacak
-
 const permissionList = new Map([
   ["*", "*:*"],
-  ["usc", "users:create"],
-  ["usr", "users:read"],
-  ["usu", "users:update"],
-  ["usd", "users:delete"],
-  ["by*", "bayi:*"],
-  ["byc", "bayi:create"],
-  ["byr", "bayi:read"],
-  ["byu", "bayi:update"],
-  ["byd", "bayi:delete"],
-  ["bydo", "bayi:deleteown"],
+  ["us", "user:"],
+  ["by", "bayi:"],
 ]);
+
+// CRUD operasyonları için mapping
+const operationMap = new Map([
+  ["+", "create"],
+  ["?", "read"],
+  ["*", "update"],
+  ["-", "delete"]
+]);
+
+const attributeMap = new Map([
+  ["o", "own"],
+  ["n", "new"],
+]);
+
 
 const roles = [
   { name: "superAdmin", permissions: ["*"] },
   {
     name: "admin",
-    permissions: ["usr", "usw", "usd"],
+    permissions: ["us%", "by%"],  // Tüm user ve bayi yetkileri
   },
   {
     name: "ik",
-    permissions: ["usr", "usu"],
+    permissions: ["us%"],
   },
   {
     name: "user",
-    permissions: ["usr", "byr", "byc", "bydo"],
+    permissions: ["us.", "by.", "by+", "by*o", "by-o"],
   },
 ];
 
 const users = new Map([
-  [
-    "can",
-    {
-      name: "can",
-      roles: ["admin", "superAdmin"],
-    },
-  ],
+  ["can", { name: "can", roles: ["admin", "superAdmin"] }],
   [
     "tuğba",
     {
       name: "tuğba",
       roles: ["ik"],
+      permissions: ["by%", "!by-"], // Tüm bayi yetkileri ama delete hariç
     },
   ],
   [
@@ -57,7 +49,7 @@ const users = new Map([
     {
       name: "ali",
       roles: ["user", "ik"],
-      permissions: ["by*"],
+      permissions: ["by%", "!by-"], // Tüm bayi yetkileri ama delete hariç
     },
   ],
   [
@@ -65,46 +57,132 @@ const users = new Map([
     {
       name: "veli",
       roles: ["user"],
-      permissions: ["usd"],
+      permissions: ["us-", "by-o", "by*o"],
     },
   ],
 ]);
+
+function expandPermission(shortPermission: string): string {
+  // Global wildcard kontrolü
+  if (shortPermission === "*") return "*:*";
+
+  // Negatif izin kontrolü
+  const isNegative = shortPermission.startsWith('!');
+  if (isNegative) {
+    shortPermission = shortPermission.slice(1);
+  }
+
+  // Resource wildcard kontrolü
+  if (shortPermission.endsWith('%')) {
+    const resource = shortPermission.slice(0, -1);
+    const basePermission = permissionList.get(resource);
+    if (!basePermission) return undefined;
+    return isNegative ? `!${basePermission}*` : `${basePermission}*`;
+  }
+
+  // Attribute'lu operatörleri kontrol et
+  let resource, operation, attribute;
+  const lastChar = shortPermission.slice(-1);
+
+  if (attributeMap.has(lastChar)) {
+    attribute = attributeMap.get(lastChar);
+    resource = shortPermission.slice(0, -2);
+    operation = shortPermission.slice(-2, -1);
+  } else {
+    resource = shortPermission.slice(0, -1);
+    operation = lastChar;
+    attribute = '';
+  }
+
+  // Temel kaynağı bul
+  const basePermission = permissionList.get(resource);
+  if (!basePermission) return undefined;
+
+  // Operasyonu genişlet
+  const expandedOperation = operationMap.get(operation);
+  if (!expandedOperation) return undefined;
+
+  const fullPermission = `${basePermission}${expandedOperation}${attribute}`;
+  return isNegative ? `!${fullPermission}` : fullPermission;
+}
 
 function getUserPermissions(user) {
   const userRoles = roles.filter((role) => user.roles.includes(role.name));
   const rolePermissions = userRoles.flatMap((role) => role.permissions);
   const userPermissions = user.permissions || [];
 
-  // Tüm izinleri birleştir, Map'ten uzun hallerini al ve undefined'ları filtrele
-  const allPermissions = [...new Set([...rolePermissions, ...userPermissions])];
-  return allPermissions
-    .map((permission) => permissionList.get(permission))
-    .filter((permission) => permission !== undefined); // undefined'ları filtrele
+  // Pozitif ve negatif izinleri ayır
+  const negativePermissions = userPermissions
+    .filter(p => p.startsWith('!'))
+    .map(p => expandPermission(p))
+    .filter(p => p !== undefined);
+
+  // Tüm pozitif izinleri birleştir
+  const allPermissions = [...rolePermissions, ...userPermissions.filter(p => !p.startsWith('!'))];
+
+  // Attribute'lu yetkileri özel olarak işle
+  const attributePermissions = allPermissions
+    .filter(p => {
+      const lastChar = p.slice(-1);
+      return attributeMap.has(lastChar);
+    })
+    .map(p => {
+      const base = p.slice(0, -2);
+      const operation = p.slice(-2, -1);
+      const attribute = p.slice(-1);
+
+      // Her operasyon-attribute kombinasyonunu oluştur
+      return [`${base}${operation}${attribute}`];
+    })
+    .flat();
+
+  const positivePermissions = [...new Set([...allPermissions, ...attributePermissions])]
+    .map(permission => expandPermission(permission))
+    .filter(permission => permission !== undefined);
+
+  return {
+    positive: positivePermissions,
+    negative: negativePermissions
+  };
 }
 
-console.log(getUserPermissions(users.get("ali")));
 
 function checkPermission(user, permission) {
   if (!user) return false;
-  const userPermissions = getUserPermissions(user);
+  const { positive: userPermissions, negative: negativePermissions } = getUserPermissions(user);
+
+  // Önce negatif izinleri kontrol et
+  for (const negPerm of negativePermissions) {
+    const cleanNegPerm = negPerm.startsWith('!') ? negPerm.slice(1) : negPerm;
+
+    // Tam eşleşme kontrolü
+    if (cleanNegPerm === permission) return false;
+
+    // Wildcard kontrolü
+    if (cleanNegPerm.endsWith('*')) {
+      const baseNegPerm = cleanNegPerm.slice(0, -1);
+      if (permission.startsWith(baseNegPerm)) return false;
+    }
+
+    // Spesifik operasyon kontrolü
+    const [negResource, negOperation] = cleanNegPerm.split(':');
+    const [permResource, permOperation] = permission.split(':');
+    if (negResource === permResource && negOperation === permOperation) return false;
+  }
 
   // SuperAdmin kontrolü (global wildcard)
   if (userPermissions.includes("*:*")) return true;
 
   return userPermissions.some((userPerm) => {
-    // Kullanıcının izni wildcard ise
-    if (userPerm?.endsWith(":*")) {
-      const basePermission = userPerm.slice(0, -2);
+    // Kullanıcının wildcard izni varsa
+    if (userPerm?.endsWith('*')) {
+      const basePermission = userPerm.slice(0, -1);
       return permission.startsWith(basePermission);
-    }
-    // Sorgulanan izin wildcard (?) ise
-    if (permission.endsWith(":?")) {
-      const basePermission = permission.slice(0, -2);
-      return userPerm.startsWith(basePermission);
     }
     // Normal izin kontrolü
     return userPerm === permission;
   });
 }
 
-console.log(checkPermission(users.get("ali"), "users:delete"));
+console.log(getUserPermissions(users.get("tuğba")));
+console.log(checkPermission(users.get("tuğba"), "bayi:create"));
