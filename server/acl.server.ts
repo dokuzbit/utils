@@ -8,30 +8,46 @@ type Role = {
     rules: string[];
 }
 
+const actions = new Map([
+    ['*', 'A'],
+    ['create', 'C'],
+    ['owncreate', 'c'],
+    ['read', 'R'],
+    ['ownread', 'r'],
+    ['update', 'U'],
+    ['ownupdate', 'u'],
+    ['delete', 'D'],
+    ['owndelete', 'd'],
+    ['confirm', 'X'],
+    ['ownconfirm', 'x'],
+]);
+
 class ACL {
 
     private permissionMap: Record<string, string> = {};
-    private permissionCache: Map<string, {
-        resource: string;
-        action: string;
-        properties: string[];
-    }> = new Map();
 
     public buildShortList(user: User, roles: Role[]) {
         // Null/undefined kontrolü
         if (!user || !roles?.length) return [];
 
         // Kullanıcı süper admin mi kontrol et
-        if (Array.isArray(user.rules) && user.rules.includes('superadmin')) {
-            return [this.shorten('superadmin')];
-        }
+        if (Array.isArray(user.rules) && user.rules.includes('superadmin')) return [this.shorten('superadmin')];
 
         // Kullanıcının rollerine ait yetkileri topla
         const rolePermissions = roles
             .filter(r => Array.isArray(user.roles) && user.roles.includes(r.role))
-            .flatMap(r => r.rules || []);
+            .flatMap(r => r.rules || [])
+            .map(permission => {
+                const [resource = '', action = '', ...props] = permission.split(':');
+                return [resource, action, ...props.sort()].join(':');
+            });
 
-        const userPermissions = Array.isArray(user.rules) ? user.rules : [];
+        const userPermissions = Array.isArray(user.rules)
+            ? user.rules.map(permission => {
+                const [resource = '', action = '', ...props] = permission.split(':');
+                return [resource, action, ...props.sort()].join(':');
+            })
+            : [];
         const allPermissions = [...rolePermissions, ...userPermissions];
         const shortPermissions = allPermissions.map(permission => this.shorten(permission));
         return shortPermissions;
@@ -42,84 +58,51 @@ class ACL {
         if (!Array.isArray(permissions) || !permission) return false;
 
         // Süper admin kontrolü - artık sadece kısa kodu kontrol ediyoruz
-        const superAdminCode = this.shorten('superadmin');
-        if (permissions.includes(superAdminCode)) return true;
+        if (permissions.includes(this.shorten('superadmin'))) return true;
 
-        // Sorgulanan yetkiyi bir kez parse edelim
-        const [checkResource = '', checkAction = '', ...checkProps] = permission.split(':').filter(Boolean);
-        const sortedCheckProps = checkProps.sort().join();
+        // Önce tam kontrol yapalım, eğer varsa direk true dön
+        if (permissions.includes(this.shorten(permission))) return true;
+        // Artık kısa kodu parçalara bölüp işlem yapacağız
+        const [resource = '', action = '', attribute = ''] = permission.split(':');
 
-        return permissions.some(shortUserPerm => {
-            if (!shortUserPerm) return false;
-
-            const originalUserPerm = this.findOriginalPermission(shortUserPerm);
-            if (!originalUserPerm) return false;
-
-            const [userResource = '', userAction = '', ...userProps] = originalUserPerm.split(':').filter(Boolean);
-
-            // En hızlı kontrollerden başlayalım
-            if (userResource !== checkResource) return false;
-            if (checkAction === '*') return true;
-            if (userAction === '*') return true;
-            if (userAction !== checkAction) return false;
-            if (userProps.length !== checkProps.length) return false;
-
-            // Property karşılaştırması en son (en maliyetli işlem)
-            return userProps.sort().join() === sortedCheckProps;
-        });
-    }
-
-    private getPermissionParts(permission: string) {
-        // Cache'de varsa direkt dön
-        if (this.permissionCache.has(permission)) {
-            return this.permissionCache.get(permission)!;
+        // Wildcard kontrolü. Örneğin: "maliyet:*" varsa tüm maliyetleri kapsıyor.
+        if (permissions.includes(this.shorten(`${resource}:*`))) return true;
+        // Wildcard sorgulama. Örneğin: "maliyet:read" varsa "maliyet:*" sorgusu true döner.
+        // Bunun için permissionsların ilk 5 karakterini kontrol ediyoruz.
+        if (action === '*') {
+            for (const perm of permissions) {
+                if (perm.substring(0, 5) === this.shorten(resource)) {
+                    return true;
+                }
+            }
         }
 
-        // Yoksa parse et ve cache'le
-        const parts = this.parsePermissionParts(permission);
-        this.permissionCache.set(permission, parts);
-        return parts;
+        return false;
     }
 
-    private findOriginalPermission(shortCode: string): string | undefined {
-        return Object.entries(this.permissionMap)
-            .find(([_, code]) => code === shortCode)?.[0];
-    }
-
-    private parsePermissionParts(permission: string): {
-        resource: string;
-        action: string;
-        properties: string[];
-    } {
-        const [resource = '', action = '', ...properties] = permission.split(':').filter(Boolean);
-        return {
-            resource,
-            action,
-            properties
-        };
-    }
-
-    // yetkileri 5 karakterli kısa taglere çevirir.
     private shorten(name: string) {
-        if (this.permissionMap[name]) {
-            return this.permissionMap[name];
-        }
+        if (this.permissionMap[name]) return this.permissionMap[name];
+        const [resource = '', action = '', attribute = ''] = name.split(':');
+        const encodedResource = this.FNV_1a(resource);
+        const encodedAction = actions.get(action.toLowerCase()) || '';
+        const encodedAttribute = attribute.length < 4 ? attribute : this.FNV_1a(attribute, 4);
+        const shortCode = `${encodedResource}${encodedAction}${encodedAttribute}`;
+        this.permissionMap[name] = shortCode;
+        return shortCode;
+    }
 
-        // Daha iyi bir hash algoritması kullanalım (FNV-1a)
+    private FNV_1a(input: string, length = 5): string {
         const FNV_PRIME = 0x01000193;
         const FNV_OFFSET_BASIS = 0x811c9dc5;
 
         let hash = FNV_OFFSET_BASIS;
-        for (let i = 0; i < name.length; i++) {
-            hash ^= name.charCodeAt(i);
+        for (let i = 0; i < input.length; i++) {
+            hash ^= input.charCodeAt(i);
             hash = Math.imul(hash, FNV_PRIME);
         }
-
-        // Base36'ya çevir ve 5 karakter al
-        const shortCode = Math.abs(hash).toString(36).slice(0, 5);
-        this.permissionMap[name] = shortCode;
-        return shortCode;
+        return Math.abs(hash).toString(36).slice(0, length);
     }
+
 }
 
 export const acl = new ACL();
