@@ -1,106 +1,64 @@
-import { expect, test } from 'bun:test';
-import { acl, ACL } from "../../server/acl.server";
+import { expect, test } from "bun:test";
+import { acl } from "../../server/acl.server";
+import { mariadb } from "../../server/mariadb.server";
 
-
-const user = {
-    "roles": [
-        "pazarlama",
-        "muhasebe",
-        "finans"
-    ],
-    "rules": [
-        "maliyet:read"
-    ]
-}
-
-const roles = {
-
-    pazarlama: [
-        "pazarlama:read",
-        "pazarlama:update:own"
-    ]
-}
-
-
-
-test("Can rolünün izinleri doğru mu?", () => {
-    const acl = new ACL();
-    const userPermissions = acl.buildShortList(user, roles);
-    console.log(acl.checkPermission(userPermissions, "pazarlama:read"));
-
-    // console.log(myACL.buildPermissionList(users[6], roles));
-
-    // const can = users[6];
-    // const userPermissions = myACL.getPermissions(can, roles);
-    // console.log(userPermissions);
-    // expect(myACL.checkPermission(userPermissions, "can:create")).toBe(true);
-    // expect(myACL.checkPermission(userPermissions, "can:read")).toBe(true);
-
+mariadb.config({
+    host: "localhost",
+    user: "root",
+    password: "root",
+    database: "erp",
 });
 
-// test("SuperAdmin tüm izinlere sahip olmalı", () => {
-//     const myACL = new ACL(actions, attributes, permissions);
-//     const userPermissions = myACL.getPermissions(users[0], roles);
-//     expect(myACL.checkPermission(userPermissions, "invoice:delete")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "userlist:create:own")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "unknown:read")).toBe(false);
-// });
+const user =
+{
+    roles: ["pazarlama", "muhasebe", "finans"],
+    rules: ["maliyet:read", "can", "genel:*"],
+}
 
-// test("Admin rolündeki kullanıcı userlist ve invoice işlemlerine erişebilmeli", () => {
-//     const myACL = new ACL(actions, attributes, permissions);
-//     const admin = users[1];
-//     const userPermissions = myACL.getPermissions(admin, roles);
 
-//     expect(myACL.checkPermission(userPermissions, "userlist:read")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "userlist:update:own")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "invoice:delete:new")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "invoice:create")).toBe(true);
 
-//     expect(myACL.checkPermission(userPermissions, "unknown:read")).toBe(false);
-// });
 
-// test("Accounting ve user rollerinin birleşimindeki kullanıcı için izin kontrolleri", () => {
-//     const myACL = new ACL(actions, attributes, permissions);
-//     const accounting = users[2];
-//     const userPermissions = myACL.getPermissions(accounting, roles);
+const roles = [
+    {
+        role: "pazarlama",
+        rights: ["pazarlama:read", "pazarlama:update:own"],
+    },
+    {
+        role: "muhasebe",
+        rights: ["muhasebe:read", "muhasebe:update:own:new"],
+    },
+    {
+        role: "finans",
+        rights: ["finans:read", "finans:update:own"],
+    },
+];
 
-//     expect(myACL.checkPermission(userPermissions, "userlist:update:own")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "userlist:delete:own:new")).toBe(true);
+test("Can rolünün izinleri doğru mu?", () => {
+    const t1 = performance.now();
+    const userPermissions = acl.buildShortList(user, roles);
+    const t2 = performance.now();
+    console.log(acl.checkPermission(userPermissions, "can"));
+    const t3 = performance.now();
+    expect(acl.checkPermission(userPermissions, "can")).toBe(true);
+    expect(acl.checkPermission(userPermissions, "maliyet:read")).toBe(true);
+    expect(acl.checkPermission(userPermissions, "pazarlama:read")).toBe(true);
+    expect(acl.checkPermission(userPermissions, "pazarlama:*")).toBe(true);
+    expect(acl.checkPermission(userPermissions, "muhasebe:update:own:new")).toBe(true);
+    expect(acl.checkPermission(userPermissions, "muhasebe:update:new:own")).toBe(true);
+    expect(acl.checkPermission(userPermissions, "error:read")).toBe(false);
+    expect(acl.checkPermission(userPermissions, "genel:read")).toBe(true);
+    expect(acl.checkPermission(userPermissions, "genel:*")).toBe(true);
+    expect(acl.checkPermission(userPermissions, "finans:update:own")).toBe(true);
+    expect(acl.checkPermission(userPermissions, "finans:update:own:new")).toBe(false);
+    expect(acl.checkPermission(userPermissions, "finans:update")).toBe(false);
+    console.log(`buildShortList: ${t2 - t1}ms`);
+    console.log(`checkPermission: ${t3 - t2}ms`);
+});
 
-//     expect(myACL.checkPermission(userPermissions, "invoice:read")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "invoice:create")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "invoice:update:own")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "invoice:delete:new")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "invoice:delete")).toBe(false);
-// });
 
-// test("AccountingAdmin negatif izin işlemiyle kısıtlanmalı", () => {
-//     const myACL = new ACL(actions, attributes, permissions);
-//     const accountingAdmin = users[3];
-//     const userPermissions = myACL.getPermissions(accountingAdmin, roles);
+// muhasebe:* diye wildcard bir yetki olmalı, yabi muhasebe altında tanımlanan tüm yetkilere onay ver
+// muhasebe:* diye sorgulama yapabilmeliyiz, yani muhasebe ile başlayan herhangi bir yetki var mı?
+// ikinci kolandan sonra gelen x sayıda property nin sırası fart etmemeli. Yani yetki muhasebe:delete:own:new iken muhasebe:delete:new:own diye sorduğumuzda true dönmeli.
+// actions da opsiyonel olmalı sadece resource olarak yetki tanımlanabilir, sorgularken hata yapmamalı.
+// yetki kontrolünde startswith kullanılmamalı, örneğin pazaralama:update:own:new yetkisi varken pazarlama:update.own sorgusu true döndü
 
-//     expect(myACL.checkPermission(userPermissions, "invoice:delete")).toBe(false);
-//     expect(myACL.checkPermission(userPermissions, "invoice:read")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "invoice:delete:new")).toBe(false);
-// });
-
-// test("Sadece user rolüne sahip kullanıcı için testler", () => {
-//     const myACL = new ACL(actions, attributes, permissions);
-//     const user = users[4];
-//     const userPermissions = myACL.getPermissions(user, roles);
-
-//     expect(myACL.checkPermission(userPermissions, "userlist:read")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "userlist:update:own")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "userlist:delete:own:new")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "userlist:delete:new")).toBe(false);
-// });
-
-// test("UserAdmin direkt izinleri eklenmiş kullanıcı", () => {
-//     const myACL = new ACL(actions, attributes, permissions);
-//     const userAdmin = users[5];
-//     const userPermissions = myACL.getPermissions(userAdmin, roles);
-
-//     expect(myACL.checkPermission(userPermissions, "userlist:create")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "userlist:read:own")).toBe(true);
-//     expect(myACL.checkPermission(userPermissions, "userlist:delete:own:new")).toBe(true);
-// });
