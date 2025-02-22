@@ -72,7 +72,6 @@ export class Session {
 		this.checkConfig();
 		delete data?.exp;
 		delete data?.iat;
-		cache.set(options?.cookieName || this.sm.cookieName, data, 1000 * 60 * 5);
 		const token = jwt.sign(data, this.sm.secret, { expiresIn: options?.expiresIn || this.sm.expiresIn });
 		this.sm.cookies?.set(options?.cookieName || this.sm.cookieName, token, {
 			path: options?.path || this.sm.path,
@@ -99,8 +98,10 @@ export class Session {
 		if (!cookie) return this.returnPayload(null, false, 'Cookie not found');
 		try {
 			const payload = jwt.verify(cookie, this.sm.secret);
+			cache.set(cookieName || this.sm.cookieName, payload, 1000 * 60 * 5);
 			return this.returnPayload(payload, false, null);
 		} catch (error) {
+			cache.remove(cookieName || this.sm.cookieName);
 			if (error instanceof jwt.TokenExpiredError) {
 				let payload = jwt.decode(cookie) as JwtPayload;
 				if (callback) {

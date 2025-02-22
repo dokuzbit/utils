@@ -114,6 +114,13 @@ export class Cache<T> {
         return node.value.value;
     }
 
+    public remove(key: string): void {
+        this.removeExpired();
+        this.cache.delete(key);
+        this.currentSize -= this.cache.get(key)!.value.size;
+        this.removeNode(this.cache.get(key)!);
+    }
+
     public getMeta(key: string): Partial<CacheItem<T>> | null {
         this.removeExpired();
         return {
