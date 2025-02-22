@@ -1,27 +1,54 @@
+type User = {
+    roles: string[];
+    rules: string[];
+}
+
+type Roles = {
+    [key: string]: string[];
+}
+
+const user = {
+    "roles": [
+        "pazarlama",
+        "muhasebe",
+        "finans"
+    ],
+    "rules": [
+        "maliyet:read"
+    ]
+}
+
+const roles = {
+    "pazarlama": [
+        "pazarlama:read",
+        "pazarlama:update:own"
+    ]
+}
+
+
+
 export class ACL {
-    actionMap: Map<string, string>;
-    attributeMap: Map<string, string>;
-    permissionMap: Map<string, string>;
-    constructor(actions?: string[][], attributes?: string[][], permissions?: string[][]) {
-        this.actionMap = new Map();
-        this.attributeMap = new Map();
-        this.permissionMap = new Map();
-        if (actions && attributes && permissions) {
-            this.init(actions, attributes, permissions);
-        }
+
+    private permissionMap: Record<string, string> = {};
+
+    public buildShortList(user: User, roles: Roles) {
+        // user.rolus u kullanarak roles içindeki yetkiler al ve sonra user.rules ile birleştir.
+        const userRoles = Object.keys(roles).filter(role => user.roles?.includes(role));
+        const rolePermissions = userRoles.flatMap(role => roles[role]);
+        const userPermissions = user.rules || [];
+        const allPermissions = [...rolePermissions, ...userPermissions];
+        const shortPermissions = allPermissions.map(permission => this.shorten(permission));
+        return shortPermissions;
     }
 
-    public init(actions: string[][], attributes: string[][], permissions: string[][]) {
-        this.actionMap = new Map(actions.map(action => [action[0], action[1]]));
-        this.attributeMap = new Map(attributes.map(attribute => [attribute[0], attribute[1]]));
-        this.permissionMap = new Map(permissions.map(permission => [permission[0], permission[1]]));
-    }
 
-    public getPermissions(user: { roles: string[], permissions?: string[] }, roles: { name: string, permissions: string[] }[]) {
+
+    public getPermissions(user: { id: string, roles?: string[], permissions?: string[] }, roles?: { name: string, permissions: string[] }[]) {
         // Kullanıcının rollerinden gelen izinleri al
-        const rolePermissions = roles
+        const rolePermissions = roles ? roles
             .filter(role => user.roles?.includes(role.name))
-            .flatMap(role => role.permissions);
+            .flatMap(role => role.permissions)
+            : [];
 
         // Kullanıcının direkt izinlerini al
         const userPermissions = user.permissions || [];
@@ -274,6 +301,31 @@ export class ACL {
         console.log("Filtered permissions:", filteredPermissions);
         return filteredPermissions;
     }
+
+    private shorten(name: string) {
+        if (this.permissionMap[name]) {
+            return this.permissionMap[name];
+        }
+
+        // Daha iyi bir hash algoritması kullanalım (FNV-1a)
+        const FNV_PRIME = 0x01000193;
+        const FNV_OFFSET_BASIS = 0x811c9dc5;
+
+        let hash = FNV_OFFSET_BASIS;
+        for (let i = 0; i < name.length; i++) {
+            hash ^= name.charCodeAt(i);
+            hash = Math.imul(hash, FNV_PRIME);
+        }
+
+        // Base36'ya çevir ve 5 karakter al
+        const shortCode = Math.abs(hash).toString(36).slice(0, 5);
+        this.permissionMap[name] = shortCode;
+        return shortCode;
+    }
 }
 
 export const acl = new ACL();
+
+
+
+
