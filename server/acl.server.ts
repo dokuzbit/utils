@@ -30,41 +30,25 @@ class ACL {
     }
 
     public checkPermission(permissions: string[], permission: string): boolean {
-        const shortPermission = this.shorten(permission);
+        // Sorgulanan yetkiyi bir kez parse edelim, loop içinde tekrar tekrar yapmayalım
+        const [checkResource = '', checkAction = '', ...checkProps] = permission.split(':').filter(Boolean);
+        const sortedCheckProps = checkProps.sort().join();
 
         return permissions.some(shortUserPerm => {
             const originalUserPerm = this.findOriginalPermission(shortUserPerm);
             if (!originalUserPerm) return false;
 
-            const userPermParts = this.parsePermissionParts(originalUserPerm);
-            const checkPermParts = this.parsePermissionParts(permission);
+            const [userResource = '', userAction = '', ...userProps] = originalUserPerm.split(':').filter(Boolean);
 
-            // Resource kontrolü
-            if (userPermParts.resource !== checkPermParts.resource) {
-                return false;
-            }
+            // En hızlı kontrollerden başlayalım
+            if (userResource !== checkResource) return false;
+            if (checkAction === '*') return true;
+            if (userAction === '*') return true;
+            if (userAction !== checkAction) return false;
+            if (userProps.length !== checkProps.length) return false;
 
-            // Eğer sorgulanan yetki wildcard ise ve resource eşleşiyorsa true dön
-            if (checkPermParts.action === '*') {
-                return true;
-            }
-
-            // Kullanıcının wildcard yetkisi varsa izin ver
-            if (userPermParts.action === '*') {
-                return true;
-            }
-
-            // Action kontrolü
-            if (userPermParts.action !== checkPermParts.action) {
-                return false;
-            }
-
-            // Property'leri karşılaştır (sıradan bağımsız)
-            const userProps = new Set(userPermParts.properties);
-            const requiredProps = new Set(checkPermParts.properties);
-
-            return requiredProps.size === userProps.size &&
-                Array.from(requiredProps).every(prop => userProps.has(prop));
+            // Property karşılaştırması en son (en maliyetli işlem)
+            return userProps.sort().join() === sortedCheckProps;
         });
     }
 
