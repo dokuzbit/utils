@@ -98,7 +98,8 @@ export class Session {
 		if (!cookie) return this.returnPayload(null, false, 'Cookie not found');
 		try {
 			const payload = jwt.verify(cookie, this.sm.secret);
-			cache.set(cookieName || this.sm.cookieName, payload, 1000 * 60 * 5);
+			const remainingTime = (payload as JwtPayload).exp! * 1000 - Date.now();
+			cache.set(cookieName || this.sm.cookieName, payload, remainingTime);
 			return this.returnPayload(payload, false, null);
 		} catch (error) {
 			cache.remove(cookieName || this.sm.cookieName);
