@@ -1,5 +1,6 @@
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 import { merge, set } from 'lodash-es';
+import { cache } from './cache.server';
 
 interface Cookies {
 	set: (name: string, value: string, options: CookiesOptions) => void,
@@ -71,6 +72,7 @@ export class Session {
 		this.checkConfig();
 		delete data?.exp;
 		delete data?.iat;
+		cache.set(options?.cookieName || this.sm.cookieName, data, 1000 * 60 * 5);
 		const token = jwt.sign(data, this.sm.secret, { expiresIn: options?.expiresIn || this.sm.expiresIn });
 		this.sm.cookies?.set(options?.cookieName || this.sm.cookieName, token, {
 			path: options?.path || this.sm.path,
@@ -88,6 +90,10 @@ export class Session {
 	 * @returns A promise that resolves to an object containing the payload, expired status, and error.
 	 */
 	async getToken(cookieName?: string, callback?: (payload: any) => Promise<boolean>): Promise<PayloadInterface> {
+		// Check if the token is cached, return the cached payload
+		const cachedPayload = cache.get(cookieName || this.sm.cookieName)
+		if (cachedPayload) return this.returnPayload(cachedPayload, false, null);
+
 		this.checkConfig();
 		const cookie = this.sm.cookies?.get(cookieName || this.sm.cookieName);
 		if (!cookie) return this.returnPayload(null, false, 'Cookie not found');
