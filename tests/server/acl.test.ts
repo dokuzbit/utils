@@ -21,15 +21,15 @@ const user =
 const roles = [
     {
         role: "pazarlama",
-        rights: ["pazarlama:read", "pazarlama:update:own"],
+        rules: ["pazarlama:read", "pazarlama:update:own"],
     },
     {
         role: "muhasebe",
-        rights: ["muhasebe:read", "muhasebe:update:own:new"],
+        rules: ["muhasebe:read", "muhasebe:update:own:new"],
     },
     {
         role: "finans",
-        rights: ["finans:read", "finans:update:own"],
+        rules: ["finans:read", "finans:update:own"],
     },
 ];
 

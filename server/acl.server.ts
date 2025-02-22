@@ -5,7 +5,7 @@ type User = {
 
 type Role = {
     role: string;
-    rights: string[];
+    rules: string[];
 }
 
 class ACL {
@@ -21,7 +21,7 @@ class ACL {
         // Kullanıcının rollerine ait yetkileri topla
         const rolePermissions = roles
             .filter(r => user.roles?.includes(r.role))
-            .flatMap(r => r.rights);
+            .flatMap(r => r.rules);
 
         const userPermissions = user.rules || [];
         const allPermissions = [...rolePermissions, ...userPermissions];
