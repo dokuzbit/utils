@@ -11,7 +11,7 @@ mariadb.config({
 
 const user =
 {
-    roles: ["pazarlama", "muhasebe", "finans"],
+    roles: ["pazarlama", "muhasebe", "finans", "admin"],
     rules: ["maliyet:read", "can", "genel:*"],
 }
 
@@ -31,10 +31,15 @@ const roles = [
         role: "finans",
         rules: ["finans:read", "finans:update:own"],
     },
+    {
+        role: "admin",
+        rules: ["muhasebe:delete", "satis:onay"],
+    },
 ];
 
 test("Can rolünün izinleri doğru mu?", () => {
     const userPermissions = acl.buildShortList(user, roles);
+    console.log(acl.checkPermission(userPermissions, "finans:xxx"));
     expect(acl.checkPermission(userPermissions, "can")).toBe(true);
     expect(acl.checkPermission(userPermissions, "maliyet:read")).toBe(true);
     expect(acl.checkPermission(userPermissions, "pazarlama:read")).toBe(true);
