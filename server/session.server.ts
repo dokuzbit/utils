@@ -68,7 +68,7 @@ export class Session {
 	 * @param options.maxAge - The maximum age of the cookie.
 	 * @returns A promise that resolves to a boolean indicating the success of the operation.
 	 */
-	async setToken(data: any, options: { cookieName?: string, expiresIn?: string, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number } = {}): Promise<boolean> {
+	async setToken(data: any, options: { cookieName?: string, expiresIn?: string, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number } = {}): Promise<string> {
 		this.checkConfig();
 		delete data?.exp;
 		delete data?.iat;
@@ -79,7 +79,10 @@ export class Session {
 			secure: options?.secure || this.sm.secure,
 			maxAge: options?.maxAge || this.sm.maxAge
 		});
-		return true;
+		const newToken = await this.getToken(options?.cookieName || this.sm.cookieName);
+		const remainingTime = (newToken.payload as JwtPayload).exp! * 1000 - Date.now();
+		cache.set(options?.cookieName || this.sm.cookieName, newToken.payload, remainingTime);
+		return token;
 	}
 
 	/**
@@ -124,18 +127,22 @@ export class Session {
 		const { payload } = await this.getToken();
 		const mergedPayload = merge(payload, newPayload);
 		await this.setToken(mergedPayload);
+		const remainingTime = (mergedPayload as JwtPayload).exp! * 1000 - Date.now();
+		cache.set(this.sm.cookieName, mergedPayload, remainingTime);
 		return this.returnPayload(mergedPayload, false, null);
 	}
 
 	async clearToken(): Promise<boolean> {
 		this.checkConfig();
 		await this.setToken({});
+		cache.remove(this.sm.cookieName);
 		return true;
 	}
 
 	async deleteToken(cookieName?: string, cookiePath?: string): Promise<boolean> {
 		this.checkConfig();
 		this.sm.cookies?.delete(cookieName || this.sm.cookieName, { path: cookiePath || this.sm.path });
+		cache.remove(cookieName || this.sm.cookieName);
 		return true;
 	}
 
