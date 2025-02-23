@@ -19,7 +19,7 @@ interface SessionConfig {
 	cookies?: Cookies | null;
 	cookieName: string;
 	secret: string;
-	expiresIn: string;
+	expiresIn: string | number;
 	path: string;
 	httpOnly: boolean;
 	secure: boolean;
@@ -48,7 +48,7 @@ export class Session {
 
 	constructor() { }
 
-	config(config: { cookies?: any, cookieName?: string, secret?: string, expiresIn?: string, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number }): void {
+	config(config: { cookies?: any, cookieName?: string, secret?: string, expiresIn?: string | number, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number }): void {
 		this.sm = { ...this.sm, ...config };
 	}
 
@@ -68,7 +68,7 @@ export class Session {
 	 * @param options.maxAge - The maximum age of the cookie.
 	 * @returns A promise that resolves to a boolean indicating the success of the operation.
 	 */
-	async setToken(data: any, options: { cookieName?: string, expiresIn?: string, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number } = {}): Promise<string> {
+	async setToken(data: any, options: { cookieName?: string, expiresIn?: string, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number } = {}): Promise<PayloadInterface> {
 		this.checkConfig();
 		delete data?.exp;
 		delete data?.iat;
@@ -79,10 +79,10 @@ export class Session {
 			secure: options?.secure || this.sm.secure,
 			maxAge: options?.maxAge || this.sm.maxAge
 		});
-		const newToken = await this.getToken(options?.cookieName || this.sm.cookieName);
-		const remainingTime = (newToken.payload as JwtPayload).exp! * 1000 - Date.now();
+		const newToken = await this.getToken(options?.cookieName || this.sm.cookieName, true, true);
+		const remainingTime = newToken.exp - Date.now() / 1000;
 		cache.set(options?.cookieName || this.sm.cookieName, newToken.payload, remainingTime);
-		return token;
+		return newToken;
 	}
 
 	/**
@@ -91,17 +91,16 @@ export class Session {
 	 * @param [callback] - The callback function to be called if the token is expired which returns true if the token should be refreshed
 	 * @returns A promise that resolves to an object containing the payload, expired status, and error.
 	 */
-	async getToken(cookieName?: string, callback?: (payload: any) => Promise<boolean>, nocache = false): Promise<PayloadInterface> {
+	async getToken(cookieName?: string, callback?: ((payload: any) => Promise<boolean>) | boolean, nocache = false): Promise<PayloadInterface> {
 		// Check if the token is cached, return the cached payload
 		const cachedPayload = cache.get(cookieName || this.sm.cookieName)
 		if (cachedPayload && !nocache) return this.returnPayload(cachedPayload, false, null);
-
 		this.checkConfig();
 		const cookie = this.sm.cookies?.get(cookieName || this.sm.cookieName);
 		if (!cookie) return this.returnPayload(null, false, 'Cookie not found');
 		try {
 			const payload = jwt.verify(cookie, this.sm.secret);
-			const remainingTime = (payload as JwtPayload).exp! * 1000 - Date.now();
+			const remainingTime = (payload as JwtPayload).exp! - Date.now() / 1000;
 			cache.set(cookieName || this.sm.cookieName, payload, remainingTime);
 			return this.returnPayload(payload, false, null);
 		} catch (error) {
@@ -110,9 +109,16 @@ export class Session {
 				let payload = jwt.decode(cookie) as JwtPayload;
 				if (callback) {
 					try {
-						if (await callback(payload)) {
-							await this.setToken(payload);
-							return this.returnPayload(payload, false, null);
+						if (typeof callback === 'function') {
+							if (await callback(payload)) {
+								await this.setToken(payload);
+								return this.returnPayload(payload, false, null);
+							}
+						} else {
+							if (callback) {
+								await this.setToken(payload);
+								return this.returnPayload(payload, false, null);
+							}
 						}
 					} catch (error) {
 					}
@@ -127,15 +133,15 @@ export class Session {
 		const { payload } = await this.getToken();
 		const mergedPayload = merge(payload, newPayload);
 		await this.setToken(mergedPayload);
-		const remainingTime = (mergedPayload as JwtPayload).exp! * 1000 - Date.now();
+		const remainingTime = (mergedPayload as JwtPayload).exp! - Date.now() / 1000;
 		cache.set(this.sm.cookieName, mergedPayload, remainingTime);
 		return this.returnPayload(mergedPayload, false, null);
 	}
 
-	async clearToken(): Promise<boolean> {
+	async clearToken(cookieName?: string, cookiePath?: string): Promise<boolean> {
 		this.checkConfig();
-		await this.setToken({});
-		cache.remove(this.sm.cookieName);
+		await this.setToken({}, { cookieName: cookieName || this.sm.cookieName, path: cookiePath || this.sm.path });
+		cache.remove(cookieName || this.sm.cookieName);
 		return true;
 	}
 
