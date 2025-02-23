@@ -88,10 +88,10 @@ export class Session {
 	 * @param [callback] - The callback function to be called if the token is expired which returns true if the token should be refreshed
 	 * @returns A promise that resolves to an object containing the payload, expired status, and error.
 	 */
-	async getToken(cookieName?: string, callback?: (payload: any) => Promise<boolean>): Promise<PayloadInterface> {
+	async getToken(cookieName?: string, callback?: (payload: any) => Promise<boolean>, nocache = false): Promise<PayloadInterface> {
 		// Check if the token is cached, return the cached payload
 		const cachedPayload = cache.get(cookieName || this.sm.cookieName)
-		if (cachedPayload) return this.returnPayload(cachedPayload, false, null);
+		if (cachedPayload && !nocache) return this.returnPayload(cachedPayload, false, null);
 
 		this.checkConfig();
 		const cookie = this.sm.cookies?.get(cookieName || this.sm.cookieName);

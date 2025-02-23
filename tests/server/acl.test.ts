@@ -22,7 +22,7 @@ const roles = [
     },
     {
         role: "muhasebe",
-        rules: ["muhasebe:read", "muhasebe:ownUpdate:new"],
+        rules: ["muhasebe:read", "muhasebe:ownUpdate:new", "muhasebe"],
     },
     {
         role: "finans",
@@ -40,9 +40,10 @@ const permissions = [
 ]
 
 test("Can rolünün izinleri doğru mu?", () => {
-    // const permissions = acl.buildShortList(user, roles);
-    // console.log(permissions);
-    expect(acl.checkPermission(permissions, "satis:read:otomasyon1")).toBe(false);
+    const permissions = acl.buildShortList(user, roles);
+    console.log(permissions);
+    expect(acl.checkPermission(permissions, "muhasebe")).toBe(true);
+    expect(acl.checkPermission(permissions, "satis:read:otomasyon2")).toBe(false);
     expect(acl.checkPermission(permissions, "satis:read")).toBe(false);
     expect(acl.checkPermission(permissions, "satis:*")).toBe(true);
     expect(acl.checkPermission(permissions, "genel:read")).toBe(true);
