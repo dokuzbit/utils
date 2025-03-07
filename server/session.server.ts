@@ -93,8 +93,8 @@ export class Session {
 	 */
 	async getToken(cookieName?: string, callback?: ((payload: any) => Promise<boolean>) | boolean, nocache = false): Promise<PayloadInterface> {
 		// Check if the token is cached, return the cached payload
-		const cachedPayload = cache.get(cookieName || this.sm.cookieName)
-		if (cachedPayload && !nocache) return this.returnPayload(cachedPayload, false, null);
+		// const cachedPayload = cache.get(cookieName || this.sm.cookieName)
+		// if (cachedPayload && !nocache) return this.returnPayload(cachedPayload, false, null);
 		this.checkConfig();
 		const cookie = this.sm.cookies?.get(cookieName || this.sm.cookieName);
 		if (!cookie) return this.returnPayload(null, false, 'Cookie not found');
