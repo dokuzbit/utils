@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import db from '../../server/mariadb.server';
 import { merge } from 'lodash';
-import type { TypeCastResult, UpsertResult } from 'mariadb';
+import { SqlError, type TypeCastResult, type UpsertResult } from 'mariadb';
 
 const { DB_HOST, DB_USER, DB_PASS, DB_NAME, TABLE1, TABLE2 } = process.env;
 
@@ -119,4 +119,11 @@ test('update', async () => {
         expect(r).toBeDefined();
         expect((r).affectedRows).toBeGreaterThanOrEqual(1);
     }
+});
+
+test('batchUpdate', async () => {
+    await db.execute('use test')
+    const result = await db.batchUpdate({ table: TABLE1, values: [{ id: 1, name: 'test1' }, { id: 2, name: 'test2' }] });
+    expect(result).toBeDefined();
+    expect(result.affectedRows).toBeGreaterThanOrEqual(2);
 });

@@ -1,7 +1,7 @@
 import { createPool } from 'mariadb';
-import type { Pool, PoolConnection, QueryOptions, UpsertResult } from 'mariadb';
+import type { Pool, PoolConnection, QueryOptions, SqlError, UpsertResult } from 'mariadb';
 import cache from './cache.server';
-import { merge } from 'lodash-es';
+import { merge, values } from 'lodash-es';
 
 
 type joinType = 'LEFT' | 'RIGHT' | 'INNER' | 'OUTER' | 'CROSS';
@@ -49,6 +49,25 @@ interface UpdateParams {
 
 
 
+/**
+ * @class MariaDB
+ * 
+ * @property {Pool} pool - Database connection pool
+ * @property {dbConfig} dbConfig - Database configuration
+ * @property {typeof cache} cache - Cache instance
+ * 
+ * @method config - Configure the database connection
+ * @method select - Select data from the database
+ * @method update - Update data in the database
+ * @method insert - Insert data into the database
+ * @method upsert - Insert or update data into the database
+ * @method delete - Delete data from the database
+ * @method batch - Execute a batch of queries
+ * @method batchUpdate - Update multiple records in the database
+ * @method batchInsert - Insert multiple records into the database
+ * @method batchDelete - Delete multiple records from the database
+ */
+
 export class MariaDB {
 	private pool: Pool | undefined;
 	private dbConfig: dbConfig | undefined;
@@ -63,6 +82,9 @@ export class MariaDB {
 		if (!this.dbConfig || !this.dbConfig.host || !this.dbConfig.database || !this.dbConfig.user || !this.dbConfig.password) throw new Error('database, user and password are required');
 		if (!this.pool) this.pool = createPool(this.dbConfig);
 	}
+
+
+
 
 	// TODO: implement asArray
 	// TODO: chunk & asArray ???
@@ -166,8 +188,56 @@ export class MariaDB {
 		return await this.query(sql, [...placeholders, ...whereParams]);
 	}
 
+	/**
+	 * Çoklu kayıt güncellemesi yapar
+	 * 
+	 * @param {string} options.table - Tablo adı
+	 * @param {Array<Object>} options.values - Güncellenecek kayıtlar dizisi [{alan1: değer1, alan2: değer2, ...}, {...}]
+	 * @param {string} options.whereField - Güncelleme için kullanılacak benzersiz alan adı (örn: "id")
+	 * @returns {Promise<UpsertResult>} - İşlem sonucu
+	 */
+	async batchUpdate(options: { table: string; values: Record<string, any>[]; whereField?: string }): Promise<UpsertResult> {
+		const { table, values, whereField = 'id' } = options;
+
+		if (!table || !values || !whereField || !Array.isArray(values) || values.length === 0) throw new Error('Geçersiz parametreler: table, values (dizi olmalı) ve whereField zorunludur');
+
+		if (values.some(record => whereField in record === false)) throw new Error(`Tüm kayıtlarda '${whereField}' alanı bulunmalıdır`);
+
+		// Tüm kayıtlarda aynı alanların olduğunu kontrol et (whereField hariç)
+		const firstRecordFields = Object.keys(values[0]).filter(field => field !== whereField);
+		const allHaveSameFields = values.every(record => {
+			const fields = Object.keys(record).filter(field => field !== whereField);
+			return fields.length === firstRecordFields.length &&
+				fields.every(field => firstRecordFields.includes(field));
+		});
+
+		if (!allHaveSameFields) throw new Error('Tüm kayıtlarda aynı alanlar bulunmalıdır');
+
+		try {
+			const fields = firstRecordFields;
+			const setClause = fields.map(field => `${field} = ?`).join(', ');
+			const query = `UPDATE ${table} SET ${setClause} WHERE ${whereField} = ?`;
+
+			// Parametreleri hazırla
+			const batchParams = values.map(record => {
+				const whereValue = record[whereField];
+				const values = fields.map(field => record[field]);
+				return [...values, whereValue];
+			});
+
+			// Kendi batch metodunu kullan
+			return await this.batch(query, batchParams);
+
+		} catch (err) {
+			console.error('Batch update hatası:', err);
+			throw err;
+		}
+	}
+
+
+
 	// DONE: insert single or batch
-	async insert<T>(table: string, values: Record<string, any> | Record<string, any>[]): Promise<any> {
+	async insert<T>(table: string, values: Record<string, any> | Record<string, any>[]): Promise<UpsertResult> {
 		if (Array.isArray(values)) {
 			// Boş dizi kontrolü ekleyelim
 			if (values.length === 0) {
@@ -244,11 +314,11 @@ export class MariaDB {
 		return await this.pool.execute(sql, values);
 	}
 
-	public async batch(sql: string | QueryOptions, values?: any[], params: Record<string, any>[] = []): Promise<UpsertResult | UpsertResult[] | { error: unknown }> {
-		if (!this.pool) return { error: 'pool is not initialized' };
+	public async batch(sql: string | QueryOptions, values?: any[], params: Record<string, any>[] = []): Promise<UpsertResult> {
+		if (!this.pool) throw new Error('pool is not initialized');
 		if (params.length > 0 && typeof sql === 'string') sql = { sql: sql, ...params }
 		const conn = await this.pool.getConnection();
-		const result = await conn.batch(sql, values);
+		const result = await conn.batch<UpsertResult>(sql, values);
 		conn.release();
 		return result;
 	}
