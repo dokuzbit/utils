@@ -10,8 +10,6 @@
  * @returns {result:T|null,error:string|null} - The result of the fetch operation
  */
 
-import { SqlError } from "mariadb";
-
 let base = ''
 let globalApiBaseUrl: string = base;
 interface Response<T> {
@@ -52,7 +50,7 @@ export class Api {
 		} catch (err: unknown) {
 			return {
 				data: null,
-				error: err instanceof SqlError ? { name: err.name, code: err.code, cause: err.cause, message: err.message } : 'Unknown error',
+				error: err instanceof Error ? { name: err.name, message: err.message, cause: err?.cause } : 'Unknown error',
 				status: 500,
 				ok: false,
 			};
