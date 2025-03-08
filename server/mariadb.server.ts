@@ -210,12 +210,14 @@ export class MariaDB {
 
 	public async query(sql: string | QueryOptions, values?: any, params: Record<string, any>[] = []): Promise<any> {
 		if (!this.pool) return { error: 'pool is not initialized' };
-		if (params.length > 0 && typeof sql === 'string') sql = { sql: sql, ...params }
+		// Önce string sql ile object sql yapalım, böylece sonra çift kontrole gerek kalmayacak
+		if (typeof sql === 'string') sql = { sql: sql, ...params }
+		// Eğer values bir obje ise namedPlaceholders'ı true yapalım
+		if (values?.constructor === Object) sql = { ...sql, namedPlaceholders: true }
 		let result = await this.pool.query(sql, values);
-		if (result.length === 1) {
-			if (typeof sql === 'string' && (sql.toLowerCase().includes('limit 1 ') || sql.toLowerCase().endsWith('limit 1'))) return result[0]
-			if (typeof sql === 'object' && (sql.sql.toLowerCase().includes('limit 1 ') || sql.sql.toLowerCase().endsWith('limit 1'))) return result[0]
-		}
+		// Eğer result bir dizi ve tek bir eleman ise ve sql'de limit 1 varsa, o elemanı döndürelim
+		if (result.length === 1 && (/\blimit\s+1\b/i.test(sql.sql))) return result[0]
+		// if (sql.sql.toLowerCase().includes('limit 1 ') || sql.sql.toLowerCase().endsWith('limit 1')) return result[0]
 		if (result.meta) result.meta = this.getColumnDefs(result.meta);
 		return result
 	}

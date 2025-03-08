@@ -39,12 +39,19 @@ test('setup db', async () => {
     }
 });
 
-test('query', async () => {
+test.only('query', async () => {
     await db.query('use test')
     await db.insert(TABLE1, { name: 'testQuery' })
     const result = await db.query('SELECT * FROM test where name = ?', ['testQuery']);
     expect(result).toBeDefined();
     expect(result.length).toBeGreaterThanOrEqual(1);
+    const result2 = await db.query({ sql: 'SELECT * FROM test where name = :name', namedPlaceholders: true }, { name: 'testQuery' });
+    expect(result2).toBeDefined();
+    expect(result2.length).toBeGreaterThanOrEqual(1);
+    const result3 = await db.query('SELECT * FROM test where name = :name', { name: 'testQuery' });
+    expect(result3).toBeDefined();
+    expect(result3.length).toBeGreaterThanOrEqual(1);
+
 });
 
 test('getFirst', async () => {
