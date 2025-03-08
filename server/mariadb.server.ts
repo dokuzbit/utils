@@ -146,26 +146,40 @@ export class MariaDB {
 	async update(params: UpdateParams): Promise<UpsertResult> {
 		if (!params.where) throw new Error('where is required');
 		let { table, values, where, whereParams } = params;
-		if (!Array.isArray(values)) values = [values]
+		// Type güvenliği için values'u Record<string, any>[] olarak dönüştürüyoruz
+		const valuesArray: Record<string, any>[] = Array.isArray(values) ? values : [values];
+
+		// Boş values dizisi kontrolü
+		if (valuesArray.length === 0) {
+			throw new Error('values is required');
+		}
+
 		// NOTE: whereParams must be built before where
-		whereParams = this.buildWhereParams(where, whereParams)
-		where = this.buildWhere(where)
-		const sql = `UPDATE ${table} SET ${Object.keys(values[0])
+		whereParams = this.buildWhereParams(where, whereParams);
+		where = this.buildWhere(where);
+
+		const sql = `UPDATE ${table} SET ${Object.keys(valuesArray[0])
 			.map((key) => '`' + key + '` = ?')
 			.join(',')} WHERE ${where}`;
-		let placeholders = values.flatMap(Object.values)
+
+		const placeholders = valuesArray.flatMap(Object.values);
 		return await this.query(sql, [...placeholders, ...whereParams]);
 	}
 
 	// DONE: insert single or batch
 	async insert<T>(table: string, values: Record<string, any> | Record<string, any>[]): Promise<any> {
 		if (Array.isArray(values)) {
-			console.log(values);
+			// Boş dizi kontrolü ekleyelim
+			if (values.length === 0) {
+				throw new Error('Empty values array');
+			}
 
-			let sql = `INSERT INTO ${table} (${Object.keys(values[0])
+			// İlk item'ın sütunlarını alalım
+			const columns = Object.keys(values[0]);
+			let sql = `INSERT INTO ${table} (${columns
 				.map((key) => '`' + key + '`')
 				.join(',')}) VALUES ${values
-					.map((values) => `(${Object.keys(values[0]).map(() => `?`).join(',')})`)
+					.map(() => `(${columns.map(() => '?').join(',')})`)
 					.join(', ')}`;
 
 			const params = values.flatMap(Object.values);
@@ -176,8 +190,10 @@ export class MariaDB {
 			sql = sql.replace(/,not/g, ',`not`');
 			return await this.batch(sql, params);
 		} else {
-			let sql = `INSERT INTO ${table} (${Object.keys(values).join(',')}) VALUES (${Object.keys(values)
-				.map((key) => `?`)
+			// Tek kayıt ekleme durumu
+			const columns = Object.keys(values);
+			let sql = `INSERT INTO ${table} (${columns.map(key => '`' + key + '`').join(',')}) VALUES (${columns
+				.map(() => '?')
 				.join(',')})`;
 			// TODO: daha iyi bir çözüm bul
 			// replace ,not with ,`not`
@@ -212,8 +228,8 @@ export class MariaDB {
 		if (!this.pool) return { error: 'pool is not initialized' };
 		// Önce string sql ile object sql yapalım, böylece sonra çift kontrole gerek kalmayacak
 		if (typeof sql === 'string') sql = { sql: sql, ...params }
-		// Eğer values bir obje ise namedPlaceholders'ı true yapalım
-		if (values?.constructor === Object) sql = { ...sql, namedPlaceholders: true }
+		// Eğer values bir obje ise ve sql bir select ise namedPlaceholders'ı true yapalım
+		if (sql.sql.toLowerCase().startsWith('select') && values?.constructor === Object) sql = { ...sql, namedPlaceholders: true }
 		let result = await this.pool.query(sql, values);
 		// Eğer result bir dizi ve tek bir eleman ise ve sql'de limit 1 varsa, o elemanı döndürelim
 		if (result.length === 1 && (/\blimit\s+1\b/i.test(sql.sql))) return result[0]
@@ -246,21 +262,37 @@ export class MariaDB {
 		// if where is string, return it
 		if (typeof where === 'string') return where
 		// if where is array of strings, join them with AND
-		if (Array.isArray(where) && typeof where[0] === 'string') return where.join(' AND ')
+		if (Array.isArray(where) && where.length > 0 && typeof where[0] === 'string') return where.join(' AND ')
 		// if where is object, convert to string
-		if (typeof where === 'object') return Object.entries(where).map(([key, value]) => `${key} = ?`).join(' AND ')
+		if (typeof where === 'object' && !Array.isArray(where)) return Object.entries(where).map(([key, value]) => `${key} = ?`).join(' AND ')
 		// if where is array of objects, convert to string
-		if (Array.isArray(where) && typeof where[0] === 'object') return where.map(w => Object.entries(w).map(([key, value]) => `${key} = ?`).join(' AND ')).join(' AND ')
+		if (Array.isArray(where) && where.length > 0 && typeof where[0] === 'object') {
+			// Obje dizisini OR ile bağlıyoruz - her objeyi kendi içinde AND ile bağlıyoruz
+			return where.map(w => {
+				if (w && typeof w === 'object') {
+					return '(' + Object.entries(w).map(([key, value]) => `${key} = ?`).join(' AND ') + ')';
+				}
+				return '';
+			}).filter(Boolean).join(' OR ');
+		}
 		throw new Error('Invalid where type')
 	}
 
 	private buildWhereParams(where: Where, whereParams: WhereParams): any[] {
-		if (whereParams) return whereParams
+		if (whereParams) return Array.isArray(whereParams) ? whereParams : [whereParams]
 		if (!where) return []
 		if (typeof where === 'string') return []
-		if (Array.isArray(where) && typeof where[0] === 'string') return []
-		if (typeof where === 'object') return Object.values(where)
-		if (Array.isArray(where) && typeof where[0] === 'object') return where.flatMap(w => Object.values(w))
+		if (Array.isArray(where) && where.length > 0 && typeof where[0] === 'string') return []
+		if (typeof where === 'object' && !Array.isArray(where)) return Object.values(where)
+		if (Array.isArray(where) && where.length > 0 && typeof where[0] === 'object') {
+			// Here, we're flattening the array of objects to get all values as a flat array
+			return where.reduce((acc: any[], w) => {
+				if (w && typeof w === 'object') {
+					return [...acc, ...Object.values(w)];
+				}
+				return acc;
+			}, []);
+		}
 		throw new Error('Invalid where type')
 	}
 
@@ -309,14 +341,17 @@ export class MariaDB {
 	}
 
 	async beginTransaction(): Promise<void> {
+		if (!this.pool) throw new Error('Pool is not initialized');
 		await this.pool.query('BEGIN');
 	}
 
 	async commit(): Promise<void> {
+		if (!this.pool) throw new Error('Pool is not initialized');
 		await this.pool.query('COMMIT');
 	}
 
 	async rollback(): Promise<void> {
+		if (!this.pool) throw new Error('Pool is not initialized');
 		await this.pool.query('ROLLBACK');
 	}
 

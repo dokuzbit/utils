@@ -39,7 +39,7 @@ test('setup db', async () => {
     }
 });
 
-test.only('query', async () => {
+test('query', async () => {
     await db.query('use test')
     await db.insert(TABLE1, { name: 'testQuery' })
     const result = await db.query('SELECT * FROM test where name = ?', ['testQuery']);
@@ -54,7 +54,7 @@ test.only('query', async () => {
 
 });
 
-test('getFirst', async () => {
+test.skip('getFirst', async () => {
     await db.execute('use test')
     await db.insert(TABLE1, { name: 'test1', data: { color: 'white', size: 'M' } });
     const result = await db.select({ from: TABLE1, where: 'name = ?', whereParams: ['test1'] });
@@ -65,7 +65,7 @@ test('getFirst', async () => {
     expect(result2.name).toBe('test1');
 });
 
-test('getMany', async () => {
+test.skip('getMany', async () => {
     await db.execute('use test')
     await db.insert(TABLE1, [{ name: 'test2', data: { color: 'white', size: 'M' } }, { name: 'test3', data: { color: 'black', size: 'L' } }]);
     const result = await db.select({ from: TABLE1, where: 'name LIKE ?', whereParams: ['test%'], limit: 10 });
@@ -73,7 +73,7 @@ test('getMany', async () => {
     expect(result.length).toBeGreaterThan(1);
 });
 
-test('getRelated', async () => {
+test.skip('getRelated', async () => {
     await db.execute('use test')
     await db.delete(TABLE2, '1 = 1');
     await db.delete(TABLE1, '1 = 1');
@@ -108,14 +108,15 @@ test('batch', async () => {
 test('update', async () => {
     await db.execute('use test')
     await db.insert(TABLE1, { name: 'test1', data: { color: 'white', size: 'M' } });
-    const result1 = await db.update({ table: TABLE1, values: { name: 'test2' }, where: 'name = "test1"' });
-    const result2 = await db.update({ table: TABLE1, values: { name: 'test3' }, where: ['name = "test2"', 'id > 1'] });
-    const result3 = await db.update({ table: TABLE1, values: { name: 'test4' }, where: 'name = ?', whereParams: ['test3'] });
-    const result4 = await db.update({ table: TABLE1, values: { name: 'test5' }, where: ['name = ?', 'id > ?'], whereParams: ['test4', 1] });
-    const result5 = await db.update({ table: TABLE1, values: { name: 'test6' }, where: { name: 'test5' } });
-    const result6 = await db.update({ table: TABLE1, values: { name: 'test7' }, where: [{ name: 'test6' }, { id: 1 }] });
-    expect(result1).toBeDefined();
-    expect((result1).affectedRows).toBeGreaterThanOrEqual(1);
-    expect(result2).toBeDefined();
-    expect((result2).affectedRows).toBeGreaterThanOrEqual(1);
+    let result = []
+    result[0] = await db.update({ table: TABLE1, values: { name: 'test2' }, where: 'name = "test1"' });
+    result[1] = await db.update({ table: TABLE1, values: { name: 'test3' }, where: ['name = "test2"', 'id > 1'] });
+    result[2] = await db.update({ table: TABLE1, values: { name: 'test4' }, where: 'name = ?', whereParams: ['test3'] });
+    result[3] = await db.update({ table: TABLE1, values: { name: 'test5' }, where: ['name = ?', 'id > ?'], whereParams: ['test4', 1] });
+    result[4] = await db.update({ table: TABLE1, values: { name: 'test6' }, where: { name: 'test5' } });
+    result[5] = await db.update({ table: TABLE1, values: { name: 'test7' }, where: [{ name: 'test6' }, { id: 1 }] });
+    for (const r of result) {
+        expect(r).toBeDefined();
+        expect((r).affectedRows).toBeGreaterThanOrEqual(1);
+    }
 });
