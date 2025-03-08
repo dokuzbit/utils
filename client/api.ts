@@ -10,6 +10,8 @@
  * @returns {result:T|null,error:string|null} - The result of the fetch operation
  */
 
+import { SqlError } from "mariadb";
+
 let base = ''
 let globalApiBaseUrl: string = base;
 interface Response<T> {
@@ -44,15 +46,13 @@ export class Api {
 
 		try {
 			const result = await fetch(`${globalApiBaseUrl}${url}`, options);
-			if (result.ok) {
-				return { data: await result.json(), error: null, status: result.status, ok: result.ok };
-			}
+			if (result.ok) return { data: await result.json(), error: null, status: result.status, ok: result.ok };
 			const message = await result.json();
-			return { data: null, error: message, status: result.status, ok: result.ok };
+			return { data: null, error: message || 'Unknown error', status: result.status, ok: result.ok };
 		} catch (err: unknown) {
 			return {
 				data: null,
-				error: err instanceof Error ? { name: err.name, code: err.code, cause: err.cause, message: err.message } : 'Bilinmeyen hata',
+				error: err instanceof SqlError ? { name: err.name, code: err.code, cause: err.cause, message: err.message } : 'Unknown error',
 				status: 500,
 				ok: false,
 			};
