@@ -149,9 +149,14 @@ test('update', async () => {
 
 test('objectUpdate multiple records', async () => {
     await db.execute('use test')
-    const result = await db.objectUpdate({ table: TABLE1, values: [{ id: 1, name: 'test1' }, { id: 2, name: 'test2' }] });
+    const dataset = [
+        { id: 1, name: Math.random().toString(36).substring(2, 15), data: { color: 'white', size: 'M' } },
+        { id: 2, name: Math.random().toString(36).substring(2, 15), data: { color: 'black', size: 'L' } },
+    ]
+    const result = await db.objectUpdate({ table: TABLE1, values: dataset });
     expect(result).toBeDefined();
     expect(result.affectedRows).toBeGreaterThanOrEqual(2);
+    expect(result.warningStatus).toBe(0);
 });
 
 test('objectUpdate single record', async () => {

@@ -137,7 +137,7 @@ export class MariaDB {
 	 * @method objectUpdate - Update a single or multiple records with an object
 	 * 
 	 * @param {string} options.table - Table name
-	 * @param {Array<Object>} options.values - Records to update [{field1: value1, field2: value2, ...}, {...}]
+	 * @param {Array<Object> | Object} options.values - Records to update [{field1: value1, field2: value2, ...}, {...}]
 	 * @param {string} options.whereField - Optional (default: "id") unique field name to update (e.g: "id")
 	 * @returns {Promise<UpsertResult>} - Operation result
 	 * 
@@ -149,10 +149,9 @@ export class MariaDB {
 	 * 
 	 */
 
-	async objectUpdate(options: { table: string; values: Record<string, any>[]; whereField?: string }): Promise<UpsertResult> {
-		console.log('objectUpdate', options);
-		const { table, values, whereField = 'id' } = options;
-
+	async objectUpdate(options: { table: string; values: Record<string, any>[] | Record<string, any>; whereField?: string }): Promise<UpsertResult> {
+		let { table, values, whereField = 'id' } = options;
+		if (!Array.isArray(values)) values = [values] as Record<string, any>[];
 		if (!table || !values || !whereField || !Array.isArray(values) || values.length === 0) throw new Error('Invalid parameters: table, values (array) and whereField are required');
 		if (values.some(record => whereField in record === false)) throw new Error(`Tüm kayıtlarda '${whereField}' alanı bulunmalıdır`);
 
@@ -168,8 +167,9 @@ export class MariaDB {
 
 		try {
 			const fields = firstRecordFields;
-			const setClause = fields.map(field => `${field} = ?`).join(', ');
-			const query = `UPDATE ${table} SET ${setClause} WHERE ${whereField} = ?`;
+			// Alan adlarını korumak için protectFieldName kullan
+			const setClause = fields.map(field => `${this.protectFieldName(field)} = ?`).join(', ');
+			const query = `UPDATE ${table} SET ${setClause} WHERE ${this.protectFieldName(whereField)} = ?`;
 
 			// Prepare parameters
 			const batchParams = values.map(record => {
@@ -179,6 +179,8 @@ export class MariaDB {
 			});
 
 			// Use own batch method
+			console.log('query', query);
+			console.log('batchParams', batchParams);
 			return await this.batch(query, batchParams);
 
 		} catch (err) {
