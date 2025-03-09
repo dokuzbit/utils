@@ -150,6 +150,7 @@ export class MariaDB {
 	 */
 
 	async objectUpdate(options: { table: string; values: Record<string, any>[]; whereField?: string }): Promise<UpsertResult> {
+		console.log('objectUpdate', options);
 		const { table, values, whereField = 'id' } = options;
 
 		if (!table || !values || !whereField || !Array.isArray(values) || values.length === 0) throw new Error('Invalid parameters: table, values (array) and whereField are required');
