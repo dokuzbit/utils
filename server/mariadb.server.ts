@@ -115,8 +115,7 @@ export class MariaDB {
 	 * const result = await db.query({ sql: 'SELECT * FROM users WHERE id = :id limit 1', namedPlaceholders: true }, { id: 1 });
 	 * @returns {Promise<T>} - Single object NOT array
 	 */
-
-	public async query<T>(sql: string | QueryOptions, values?: any[] | Record<string, any>, params: Record<string, any>[] = []): Promise<T[] | T> {
+	public async query<T>(sql: string | QueryOptions, values?: any[] | Record<string, any>, params: Record<string, any>[] = []): Promise<T> {
 		if (!this.pool) throw new Error('pool is not initialized');
 		// Önce string sql ile object sql yapalım, böylece sonra çift kontrole gerek kalmayacak
 		if (typeof sql === 'string') sql = { sql: sql, ...params };
@@ -125,10 +124,12 @@ export class MariaDB {
 		if (sql.sql.toLowerCase().startsWith('select') && values?.constructor === Object) sql = { ...sql, namedPlaceholders: true };
 		let result = await this.pool.query(sql, values);
 		// Eğer result bir dizi ve tek bir eleman ise ve sql'de limit 1 varsa, o elemanı döndürelim
-		if (result.length === 1 && (/\blimit\s+1\b/i.test(sql.sql))) return result[0];
+		if (Array.isArray(result) && result.length === 1 && (/\blimit\s+1\b/i.test(sql.sql))) {
+			return result[0] as T;
+		}
 		// if (sql.sql.toLowerCase().includes('limit 1 ') || sql.sql.toLowerCase().endsWith('limit 1')) return result[0]
 		if (result.meta) result.meta = this.getColumnDefs(result.meta);
-		return result;
+		return result as T;
 	}
 
 
@@ -285,132 +286,119 @@ export class MariaDB {
 
 
 	async update(params: UpdateParams): Promise<UpsertResult> {
-		if (!params.where) throw new Error('where is required');
-		let { table, values, where, whereParams } = params;
-		// Type güvenliği için values'u Record<string, any>[] olarak dönüştürüyoruz
-		const valuesArray: Record<string, any>[] = Array.isArray(values) ? values : [values];
+		const { table, values, where, whereParams = [] } = params;
+		if (!table || !values || !where) throw new Error('table, values, where is required');
 
-		// Boş values dizisi kontrolü
-		if (valuesArray.length === 0) {
-			throw new Error('values is required');
-		}
+		// Güncellenecek değerler object veya object array olabilir
+		const valuesArray = Array.isArray(values) ? values : [values];
+		if (valuesArray.length === 0) throw new Error('values is empty');
 
-		// NOTE: whereParams must be built before where
-		whereParams = this.buildWhereParams(where, whereParams);
-		where = this.buildWhere(where);
+		const setValues = valuesArray.map(obj => {
+			return Object.keys(obj).map(key => `${this.protectFieldName(key)} = ?`).join(', ');
+		});
 
-		const sql = `UPDATE ${table} SET ${Object.keys(valuesArray[0])
-			.map((key) => `${this.protectFieldName(key)} = ?`)
-			.join(',')} WHERE ${where}`;
+		const whereClause = this.buildWhere(where);
+		const whereParamsProcessed = this.buildWhereParams(where, whereParams);
+
+		// Update için SQL hazırla
+		let sql = `UPDATE ${table} SET ${setValues.join(', ')} WHERE ${whereClause}`;
 
 		const placeholders = valuesArray.flatMap(Object.values);
-		return await this.query(sql, [...placeholders, ...whereParams]);
+		const result = await this.query<UpsertResult>(sql, [...placeholders, ...whereParamsProcessed]);
+		return Array.isArray(result) ? result[0] : result;
 	}
 
 
 	// TODO: implement asArray
 	// TODO: chunk & asArray ???
 	async select(params: QueryParams): Promise<any> {
-		if (!this.pool) return { error: 'pool is not initialized' };
-		if (!params) return { error: 'params is required' };
-		let { command, from, select = '*', join = [], joinType, where = '1=1', whereParams, order, group, limit, page, offset, chunk, options, asArray = false } = params;
-		if (command === undefined) command = limit && limit > 1 ? 'findMany' : 'findFirst';
-		if (command === 'findAll' && chunk === undefined) chunk = 0;
+		const { command = 'findMany', select = '*', from, join, joinType, where, whereParams, order, group, limit, page = 1, offset, chunk, options, asArray = false } = params;
+		if (!from) throw new Error('from is required');
 
-		if (typeof select === 'string') select = [select];
-		// select alanları için backtick koruma
-		select = select.map((item) => {
-			// Eğer select ifadesi zaten "as" içeriyorsa, veya özel bir işlem ise koruma uygulamayalım
-			if (item.toLowerCase().includes(' as ') || item.includes('(') || item === '*') {
-				return item;
-			}
-			// Alan adını koru
-			return this.protectFieldName(item);
-		});
-
-		// Create SQL
-		let sql = `SELECT ${select.join(', ')} FROM `;
-
-		// from can be string or array
-		if (typeof from === 'string') {
-			sql += from;
-		} else {
-			sql += from.join(', ');
-		}
-
-		// join can be string or array
-		if (join.length > 0) {
-			if (typeof join === 'string') join = [join];
-			// joinType can be string or array
-			if (!joinType) joinType = 'LEFT';
-			if (typeof joinType === 'string') joinType = Array(join.length).fill(joinType);
-			for (let i = 0; i < join.length; i++) {
-				sql += ` ${joinType[i]} JOIN ${join[i]}`;
-			}
-		}
-
-		// where can be string or array
-		if (where) {
-			// NOTE: whereParams must be built before where
-			whereParams = this.buildWhereParams(where, whereParams);
-			where = this.buildWhere(where);
-			sql += ` WHERE ${where}`;
-		}
-
-		// group can be string or array
-		if (group) {
-			if (typeof group === 'string') group = [group];
-			// Group by alanları için backtick koruma
-			group = group.map(item => this.protectFieldName(item));
-			sql += ` GROUP BY ${group.join(', ')}`;
-		}
-
-		// order can be string or array
-		if (order) {
-			if (typeof order === 'string') order = [order];
-			// Order by alanları için backtick koruma
-			// NOT: order by ifadesi "field ASC/DESC" biçiminde olabileceği için hem alan adını koruyoruz
-			// hem de ASC/DESC kısmını koruyoruz
-			order = order.map(item => {
-				const parts = item.trim().split(/\s+/);
-				if (parts.length > 1) {
-					return `${this.protectFieldName(parts[0])} ${parts.slice(1).join(' ')}`;
-				}
-				return this.protectFieldName(item);
-			});
-			sql += ` ORDER BY ${order.join(', ')}`;
-		}
-
-		// limit can be number
-		if (limit) {
-			sql += ` LIMIT ${limit}`;
-			// offset can be number
-			if (page && page > 1) {
-				sql += ` OFFSET ${(page - 1) * limit}`;
-			} else if (offset) {
-				sql += ` OFFSET ${offset}`;
-			}
-		}
-
-		// chunk query
-		if (chunk !== undefined && chunk !== null) {
-			const [start, end, total] = await this.getChunk(sql, chunk);
-			// if chunk is '?', just return total rows
-			if (chunk === '?') return { total };
-			// if chunk not found, return null
-			if (start === null || end === null) return { total };
-			// if has where, add AND
-			if (where) {
-				sql += ` AND id BETWEEN ${start} AND ${end}`;
+		// Select field oluştur
+		let selectClause: string;
+		if (select === '*') {
+			selectClause = '*';
+		} else if (Array.isArray(select)) {
+			selectClause = select.map(s => {
+				// Eğer s bir string değil ise boş string dön
+				if (typeof s !== 'string') return '';
+				// Eğer s "as" içeriyor ise
+				if (s.includes(' as ')) return s;
+				// Eğer s "." ve "(" içeriyor ise, s'i doğrudan döndürelim
+				if (s.includes('.') || s.includes('(')) return s;
+				return this.protectFieldName(s);
+			}).join(', ');
+		} else if (typeof select === 'string') {
+			if (select.includes(',')) {
+				selectClause = select.split(',').map(s => {
+					s = s.trim();
+					// Eğer s "as" içeriyor ise
+					if (s.includes(' as ')) return s;
+					// Eğer s "." içeriyor ise veya "(" içeriyorsa, doğrudan döndür
+					if (s.includes('.') || s.includes('(')) return s;
+					return this.protectFieldName(s);
+				}).join(', ');
 			} else {
-				// if has no where, add WHERE
-				sql += ` WHERE id BETWEEN ${start} AND ${end}`;
+				selectClause = select;
 			}
+		} else {
+			throw new Error('select must be string or array');
 		}
 
+		// From kısmını hazırla, from array ise virguller ile ayır
+		let fromClause: string;
+		if (Array.isArray(from)) {
+			fromClause = from.join(', ');
+		} else {
+			fromClause = from;
+		}
+
+		// Join kısmını hazırla
+		let joinClause = '';
+		if (join && join.length > 0) {
+			const joins = Array.isArray(join) ? join : [join];
+			const joinTypes = Array.isArray(joinType) ? joinType : joinType ? [joinType] : Array(joins.length).fill('LEFT');
+
+			joinClause = joins.map((j, i) => {
+				return `${joinTypes[i] || 'LEFT'} JOIN ${j}`;
+			}).join(' ');
+		}
+
+		// Where kısmını hazırla
+		let whereClause = '';
+		if (where) {
+			whereClause = `WHERE ${this.buildWhere(where)}`;
+		}
+
+		// Order kısmını hazırla
+		let orderClause = '';
+		if (order) {
+			// Eğer order bir array değil ise, stringe çevir ve virgüller ile ayır
+			const orderArray = Array.isArray(order) ? order : order.split(',');
+			orderClause = `ORDER BY ${orderArray.join(', ')}`;
+		}
+
+		// Group kısmını hazırla
+		let groupClause = '';
+		if (group) {
+			const groups = Array.isArray(group) ? group : [group];
+			groupClause = `GROUP BY ${groups.join(', ')}`;
+		}
+
+		// Limit ve offset kısmını hazırla
+		let limitClause = '';
+		if (limit) {
+			// Offset limit * (page - 1) olarak hesaplanır
+			const offsetValue = offset || (limit * (page - 1));
+			limitClause = `LIMIT ${offsetValue}, ${limit}`;
+		}
+
+		// Query oluştur
+		const sql = `SELECT ${selectClause} FROM ${fromClause} ${joinClause} ${whereClause} ${groupClause} ${orderClause} ${limitClause}`.trim().replace(/\s+/g, ' ');
 		const result = await this.query(sql, whereParams || [], options || {});
 		// findFirst should return first row
-		if (command === 'findFirst' && result.length > 0) {
+		if (command === 'findFirst' && Array.isArray(result) && result.length > 0) {
 			return asArray ? [result[0]] : result[0];
 		}
 		return result;
@@ -418,11 +406,14 @@ export class MariaDB {
 
 	// TODO: refactor smilar to pagination and itteratable
 	private async getChunk(sql: string, chunk: number | '?' = 0): Promise<[number | null, number | null, number | null]> {
-		let chunkTable = await cache.get('chunk' + sql)
+		// sql hash al
+		let chunkTable = cache.get('chunk' + sql);
 		if (!chunkTable) {
 			chunkTable = []
-			const data = await this.query(sql);
+			const data = await this.query<Array<{ id: number }>>(sql);
+			if (!Array.isArray(data) || data.length === 0) return [null, null, null];
 			if (data[0].id === undefined) throw new Error('id is required');
+
 			chunkTable.push([data[0].id, data[data.length > 20 ? 20 - 1 : data.length - 1].id])
 			for (let i = 20; i < data.length; i += 1000) {
 				chunkTable.push([data[i].id, data[i + 1000 - 1 < data.length - 1 ? i + 1000 - 1 : data.length - 1].id])
@@ -550,7 +541,8 @@ export class MariaDB {
 
 	async getJsonExtract(table: string, where: string, jsonField: string, path: string = '') {
 		const sql = `SELECT JSON_EXTRACT(${jsonField}, ?) as value FROM ${table} WHERE ${where} LIMIT 1`;
-		return (await this.query(sql, [path ? `$.${path}` : '$']))[0]?.value;
+		const result = await this.query<{ value: any }>(sql, [path ? `$.${path}` : '$']);
+		return Array.isArray(result) ? result[0]?.value : result?.value;
 	}
 
 	async setJsonValue(table: string, where: string, jsonField: string, path: string, value: any) {
