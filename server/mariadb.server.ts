@@ -408,7 +408,7 @@ export class MariaDB {
 	// TODO: refactor smilar to pagination and itteratable
 	private async getChunk(sql: string, chunk: number | '?' = 0): Promise<[number | null, number | null, number | null]> {
 		// sql hash al
-		let chunkTable = cache.get('chunk' + sql);
+		let chunkTable = cache.get('chunk' + sql) as any[];
 		if (!chunkTable) {
 			chunkTable = []
 			const data = await this.query<Array<{ id: number }>>(sql);
@@ -421,8 +421,8 @@ export class MariaDB {
 			}
 			cache.set('chunk' + sql, chunkTable);
 		}
-		if (chunk >= chunkTable.length) return [null, null, chunkTable.length]
 		if (chunk === '?') return [null, null, chunkTable.length]
+		if (chunk >= chunkTable.length) return [null, null, chunkTable.length]
 		return [chunkTable[chunk][0], chunkTable[chunk][1], chunkTable.length]
 	}
 
