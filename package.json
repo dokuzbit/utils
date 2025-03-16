@@ -1,7 +1,7 @@
 {
   "name": "@dokuzbit/utils",
   "description": "Utility functions for web apps, both server and client.",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "author": "dokuzbit",
   "license": "MIT",
   "type": "module",
