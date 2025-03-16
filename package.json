@@ -1,8 +1,14 @@
 {
-  "name": "db-utils",
-  "version": "0.1.2",
+  "name": "@dokuzbit/webapp-utils",
+  "description": "Utility functions for web apps, both server and client.",
+  "version": "0.2.3",
+  "author": "dokuzbit",
+  "license": "MIT",
   "module": "index.ts",
   "type": "module",
+  "scripts": {
+    "test": "bun test"
+  },
   "devDependencies": {
     "@types/bun": "^1.2.4",
     "@types/jsonwebtoken": "^9.0.9",

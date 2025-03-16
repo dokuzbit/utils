@@ -10,6 +10,10 @@
  * @returns {result:T|null,error:string|null} - The result of the fetch operation
  */
 
+import { cache } from './cache';
+
+type Payload = | string | number | boolean | null | Record<string, unknown> | Payload[] | FormData | Blob | ArrayBuffer;
+
 let base = ''
 let globalApiBaseUrl: string = base;
 interface Response<T> {
@@ -32,7 +36,7 @@ export class Api {
 	private request = async <T>(
 		url: string,
 		method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
-		payload: any = null
+		payload: Payload = null
 	): Promise<Response<T>> => {
 		const options: RequestInit = {
 			method: method,
@@ -57,15 +61,34 @@ export class Api {
 		}
 	};
 
-	public get = async <T>(url: string, payload: any = null): Promise<Response<T>> => {
-		return this.request<T>(url, 'GET', payload);
+	public get = async <T>(url: string, payload: string | Record<string, string | number> | undefined = undefined, ttl: number = 300): Promise<Response<T>> => {
+		// if payload is an object, make new payload with all number values converted to strings
+		let convertedPayload: Record<string, string> | string | undefined = undefined;
+		if (payload && typeof payload === 'object') convertedPayload = Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, value.toString()]));
+		if (payload && typeof payload === 'string') convertedPayload = payload;
+
+		// if payload exists, add it to the url as query params
+		if (convertedPayload) url = `${url}?${new URLSearchParams(convertedPayload).toString()}`;
+		// if (payload && typeof payload === 'string') url = `${url}&${payload}`;
+
+		if (ttl > 0) {
+			const cached = await cache.get(url);
+			if (cached) return { data: cached, error: null, status: 200, ok: true };
+		}
+		const result = await this.request<T>(url, 'GET');
+		if (ttl > 0 && result.data) cache.set(url, result.data, ttl);
+		return result;
 	};
 
-	public post = async <T>(url: string, payload: any): Promise<Response<T>> => {
+	public get0 = async <T>(url: string, payload: string | Record<string, string | number> | undefined = undefined): Promise<Response<T>> => {
+		return this.get(url, payload, 0);
+	};
+
+	public post = async <T>(url: string, payload: Payload): Promise<Response<T>> => {
 		return this.request<T>(url, 'POST', payload);
 	};
 
-	public put = async <T>(url: string, payload: any): Promise<Response<T>> => {
+	public put = async <T>(url: string, payload: Payload): Promise<Response<T>> => {
 		return this.request<T>(url, 'PUT', payload);
 	};
 
@@ -73,7 +96,7 @@ export class Api {
 		return this.request<T>(url, 'DELETE');
 	};
 
-	public patch = async <T>(url: string, payload: any): Promise<Response<T>> => {
+	public patch = async <T>(url: string, payload: Payload): Promise<Response<T>> => {
 		return this.request<T>(url, 'PATCH', payload);
 	};
 }

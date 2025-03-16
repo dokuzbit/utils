@@ -154,6 +154,7 @@ test('objectUpdate multiple records', async () => {
         { id: 2, name: Math.random().toString(36).substring(2, 15), data: { color: 'black', size: 'L' } },
     ]
     const result = await db.objectUpdate({ table: TABLE1, values: dataset });
+    console.log(result);
     expect(result).toBeDefined();
     expect(result.affectedRows).toBeGreaterThanOrEqual(2);
     expect(result.warningStatus).toBe(0);

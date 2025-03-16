@@ -1,0 +1,107 @@
+# mariadb - Database Wrapper for MariaDB
+
+```ts
+import { mariadb } from "@dokuzbit/utils/server";
+// or
+import { mariadb } from "@dokuzbit/utils/server/mariadb";
+```
+
+## .query(sql, params) - Simple select query
+
+- sql: `string` - The SQL query to execute with ? or :id (named placeholders)  
+  _example:_ 'SELECT _ FROM users where id = ?' or 'SELECT _ FROM users where id = :id'
+- params: `array` | `object` - array of values for ordered placeholders or object for named placeholders
+  _example:_ `[1]` or `{ id: 1 }`
+- returns: `object` | `array` - returns object if limit is 1, otherwise returns array of objects
+
+```ts
+const result = await mariadb.query("SELECT * FROM users where id = ?", [1]);
+const result = await mariadb.query("SELECT * FROM users where id = :id", {
+  id: 1,
+});
+// you can use ? or :id (named placeholders) to bind the values, both will work the same
+```
+
+```ts
+const result = await mariadb.query("SELECT * FROM users where id = ? limit 1", [
+  id,
+]);
+// adding limit 1 to the query will return a single object instead of an array
+```
+
+## .objectUpdate({table, values, whereField}) - Update table with JS Object
+
+- table: `string` - The table to update. _example:_ `'users'`
+- values: `object` | `array` - object for single record or array of objects for multiple records update.  
+  _example:_ `{ id: 1, name: 'John' }` or `[{ id: 1, name: 'John' }, { id: 2, name: 'Jane' }]`
+- whereField (optional): `string` - The field to use for the where clause, defaults to 'id'
+  _example:_ `'id'`
+- returns: `object` - standart mysql result object. _example:_ `{ affectedRows: 1, insertId: 1, warningStatus: 0 }`
+
+```ts
+const result = await mariadb.objectUpdate({
+  table: "users",
+  values: { id: 1, name: "John" },
+  whereField: "id",
+});
+const result = await mariadb.objectUpdate({
+  table: "users",
+  values: { id: 1, name: "John" },
+});
+// Single Record:this will update the user with id 1 to have the name John. You can omit whereField if whereField is id as it's the default
+const result = await db.objectUpdate({
+  table: "users",
+  values: [
+    { id: 1, name: "John" },
+    { id: 2, name: "Jane" },
+  ],
+  whereField: "id",
+});
+// Multiple Records: this will update the users with id 1 and 2 to have the name John and Jane respectively
+```
+
+## .insert({table, values}) - Insert a single record or multiple records into a table
+
+- table: `string` - The table to insert the record into. _example:_ `'users'`
+- values: `object` | `array` - object for single record or array of objects for multiple records insert.  
+  _example:_ `{ name: 'John', email: 'john@example.com' }` or `[{ name: 'John', email: 'john@example.com' }, { name: 'Jane', email: 'jane@example.com' }]`
+- returns: `object` - standart mysql result object. _example:_ `{ affectedRows: 1, insertId: 1, warningStatus: 0 }`
+
+```ts
+const result = await db.insert("users", {
+  name: "John",
+  email: "john@example.com",
+});
+// Single Record: this will insert a single record into the users table
+const result = await db.insert("users", [
+  { name: "John", email: "john@example.com" },
+  { name: "Jane", email: "jane@example.com" },
+]);
+// Multiple Records: this will insert multiple records into the users table
+```
+
+## .upsert({table, values, whereField}) - Insert or Update a single record or multiple records into a table
+
+- table: `string` - The table to insert the record into. _example:_ `'users'`
+- values: `object` | `array` - object for single record or array of objects for multiple records insert.  
+  _example:_ `{ name: 'John', email: 'john@example.com' }` or `[{ name: 'John', email: 'john@example.com' }, { name: 'Jane', email: 'jane@example.com' }]`
+- whereField (optional): `string` - The field to use for the where clause, defaults to 'id'
+  _example:_ `'id'`
+
+```ts
+const result = await db.upsert(
+  "users",
+  { name: "John", email: "john@example.com" },
+  { email: "john@example.com" }
+);
+// Single Record: this will update the users table if the email field already exists, otherwise it will insert a new record
+const result = await db.upsert(
+  "users",
+  [
+    { name: "John", email: "john@example.com" },
+    { name: "Jane", email: "jane@example.com" },
+  ],
+  { email: "john@example.com" }
+);
+// Multiple Records: this will update the users table if the email field already exists, otherwise it will insert a new record
+```

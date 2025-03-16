@@ -7,6 +7,16 @@ test('api GET', async () => {
     expect(getResult.data).toBeObject();
     expect(getResult.error).toBeNull();
 });
+test('api GET with params', async () => {
+    api.setBaseUrl('https://jsonplaceholder.typicode.com/');
+    const getResult = await api.get('comments', { postId: '1' });
+    console.log(getResult);
+    expect(getResult.data).toBeObject();
+    expect(getResult.error).toBeNull();
+    const getResult2 = await api.get('comments', 'postId=1');
+    expect(getResult2.data).toBeObject();
+    expect(getResult2.error).toBeNull();
+});
 
 test('api GET Error', async () => {
     api.setBaseUrl('https://jsonplaceholder.typicode.com/2');
@@ -24,7 +34,34 @@ test('api POST', async () => {
         title: 'test',
         body: 'test'
     });
-
     expect(postResult.data).toBeObject();
     expect(postResult.error).toBeNull();
+});
+
+test('api PUT', async () => {
+    api.setBaseUrl('https://jsonplaceholder.typicode.com/');
+    const putResult = await api.put('posts/2', {
+        title: 'Test',
+        body: 'Test'
+    });
+    expect(putResult.data).toBeObject();
+    expect(putResult.error).toBeNull();
+});
+
+test('api PATCH', async () => {
+    api.setBaseUrl('https://jsonplaceholder.typicode.com/');
+    const patchResult = await api.patch('posts/2', {
+        title: 'Test'
+    });
+    console.log(patchResult);
+    expect(patchResult.data).toBeObject();
+    expect(patchResult.error).toBeNull();
+});
+
+test('api DELETE', async () => {
+    api.setBaseUrl('https://jsonplaceholder.typicode.com/');
+    const deleteResult = await api.delete('posts/2');
+    console.log(deleteResult);
+    expect(deleteResult.data).toBeObject();
+    expect(deleteResult.error).toBeNull();
 });
