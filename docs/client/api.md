@@ -35,12 +35,20 @@ const result3 = await api.get("comments", "postId=1");
 
 Example response:
 
-```ts
+```json
 {
-  data: [{ id: 1, postId: 1, name: "John Doe", email: "john@doe.com", body: "Lorem ipsum dolor sit amet" }],
-  error: null,
-  status: 200,
-  ok: true
+  "data": [
+    {
+      "id": 1,
+      "postId": 1,
+      "name": "John Doe",
+      "email": "john@doe.com",
+      "body": "Lorem ipsum dolor sit amet"
+    }
+  ],
+  "error": null,
+  "status": 200,
+  "ok": true
 }
 ```
 

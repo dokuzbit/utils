@@ -10,6 +10,12 @@ import type { NatsConnection, Subscription, PublishOptions, RequestOptions } fro
  * @method disconnect: NATS bağlantısını kapatma
  */
 
+export interface NatsConfig {
+	servers: string | string[];
+	user: string;
+	pass: string;
+}
+
 export class NatsWrapper {
 	private nc: NatsConnection | null = null;
 	private jc = JSONCodec();
@@ -19,7 +25,13 @@ export class NatsWrapper {
 	private user: string = '';
 	private pass: string = '';
 
-	config(servers: string | string[] = '', user: string = '', pass: string = ''): void {
+	constructor(config?: NatsConfig) {
+		if (config) {
+			this.config(config.servers, config.user, config.pass);
+		}
+	}
+
+	public config(servers: string | string[] = '', user: string = '', pass: string = ''): void {
 		this.servers = servers;
 		this.user = user;
 		this.pass = pass;
@@ -33,7 +45,6 @@ export class NatsWrapper {
 					user: this.user,
 					pass: this.pass
 				});
-				console.log('NATS bağlantısı başarılı');
 			}
 		} catch (error) {
 			console.error('NATS bağlantı hatası:', error);

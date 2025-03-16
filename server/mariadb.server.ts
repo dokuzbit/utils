@@ -71,7 +71,8 @@ export class MariaDB {
 	private pool: Pool | undefined;
 	private dbConfig: dbConfig | undefined;
 	private cache: typeof cache = cache;
-	constructor() {
+	constructor(dbConfig?: dbConfig) {
+		if (dbConfig) this.config(dbConfig);
 	}
 
 	/**

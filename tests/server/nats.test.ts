@@ -8,6 +8,7 @@ nats.config(NATS_URL, NATS_USER, NATS_PASS);
 test('nats request', async () => {
     nats.config(NATS_URL, NATS_USER, NATS_PASS);
     const result = await nats.request('public.ping', 'test');
+    console.log(result);
     expect(result).toMatchObject({ success: true, message: 'test' });
     await nats.disconnect();
 });
@@ -18,6 +19,7 @@ test('nats publish subscribe', async () => {
         expect(data).toMatchObject({ success: true, message: 'test' });
     });
     nats.publish('public.ping', { success: true, message: 'test' });
+    await nats.publish('public.ping', { success: true, message: 'test' });
     await nats.unsubscribe(subscription);
     await nats.disconnect();
 });

@@ -1,9 +1,32 @@
 # mariadb - Database Wrapper for MariaDB
 
+## Installation
+
+[Installation](../common.md#installation), [Singleton Pattern](../common.md#singleton-pattern), [Multiton Pattern](../common.md#multiton-pattern) and [Default Import](../common.md#default-import) is documented in [here](../common.md)
+
 ```ts
 import { mariadb } from "@dokuzbit/utils/server";
 // or
-import { mariadb } from "@dokuzbit/utils/server/mariadb";
+import db from "@dokuzbit/utils/server/mariadb";
+// ☝️ We export the singleton instance as default for easy aliasing
+```
+
+## .config(config) - Initialize the database connection
+
+- config: `object` - The configuration object for the database connection.
+  - host: `string` - The host to connect to.
+  - user: `string` - The user to connect to the database with.
+  - password: `string` - The password to connect to the database with.
+  - database: `string` - The database to connect to.
+
+```ts
+const config = {
+  host: "localhost",
+  user: "root",
+  password: "password",
+  database: "test",
+};
+mariadb.config(config);
 ```
 
 ## .query(sql, params) - Simple select query
@@ -104,4 +127,20 @@ const result = await db.upsert(
   { email: "john@example.com" }
 );
 // Multiple Records: this will update the users table if the email field already exists, otherwise it will insert a new record
+```
+
+# Multiton Example
+
+We recommend using singleton pattern as documented above. However if you want to use multiton (aka multiple instances) you can import MariaDB class directly. Here is an example:
+
+```ts
+import { MariaDB } from "@dokuzbit/utils/server";
+const config = {
+  host: "localhost",
+  user: "root",
+  password: "password",
+  database: "test",
+};
+const db1 = new MariaDB(config);
+const db2 = new MariaDB(config);
 ```

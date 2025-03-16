@@ -1,8 +1,7 @@
 import { expect, test } from 'bun:test';
-import { cache } from '../../server';
+import { cache } from "../../server";
 
-test('cache', async () => {
-    cache.set('test', 'test');
+test("cache", async () => {
     expect(cache.get('test')).toBe('test');
     expect(cache.getMeta('test')).toBeDefined();
     expect(cache.getSize()).toBeGreaterThan(0);

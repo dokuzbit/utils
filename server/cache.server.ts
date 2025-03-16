@@ -199,6 +199,6 @@ export class Cache<T> {
     }
 }
 
-export const cache = new Cache<any>();
+export const cache = new Cache<unknown>();
 export default cache;
 
