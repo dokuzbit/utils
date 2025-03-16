@@ -1,5 +1,5 @@
 {
-  "name": "@dokuzbit/webapp-utils",
+  "name": "@dokuzbit/utils",
   "description": "Utility functions for web apps, both server and client.",
   "version": "0.2.3",
   "author": "dokuzbit",
