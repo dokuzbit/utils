@@ -7,6 +7,20 @@ This library is designed for modern web apps mostly considering crm/erp systems 
 - The documentation is not complete yet.
 - The syntax of the fucntions may be different then common use as it's tailored for internal use.
 
+## Installation
+
+```bash
+bun add @dokuzbit/utils
+```
+
+```bash
+npm install @dokuzbit/utils
+```
+
+```bash
+pnpm add @dokuzbit/utils
+```
+
 ## Usage Example
 
 ```ts
@@ -15,21 +29,21 @@ import { mariadb } from "@dokuzbit/utils/server/mariadb";
 import { api } from "@dokuzbit/utils/client";
 ```
 
-## Server Side
+## Server Side Documentation
 
-- [acl](./docs/server/acl.md) - access control list for authorization
-- [auth](./docs/server/auth.md) - 3rd party authentication utilities \*\*\* **not finished yet**
-- [cache](./docs/server/cache.md) - in memory cache with expiration
-- [mariadb](./docs/server/mariadb.md) - database wrapper for mariadb
-- [memcached](./docs/server/memcached.md) - memcached wrapper with fallback
-- [nats](./docs/server/nats.md) - nats wrapper
-- [session](./docs/server/session.md) - session management utility
+- [acl](https://github.com/dokuzbit/utils/blob/main/docs/server/acl.md) - access control list for authorization (**Note:** docs not ready yet)
+- [auth](https://github.com/dokuzbit/utils/blob/main/docs/server/auth.md) - 3rd party authentication utilities (**Note:** method not ready yet)
+- [cache](https://github.com/dokuzbit/utils/blob/main/docs/server/cache.md) - in memory cache with expiration (**Note:** docs not ready yet)
+- [mariadb](https://github.com/dokuzbit/utils/blob/main/docs/server/mariadb.md) - database wrapper for mariadb
+- [memcached](https://github.com/dokuzbit/utils/blob/main/docs/server/memcached.md) - memcached wrapper with fallback (**Note:** docs not ready yet)
+- [nats](https://github.com/dokuzbit/utils/blob/main/docs/server/nats.md) - nats wrapper (**Note:** docs not ready yet)
+- [session](https://github.com/dokuzbit/utils/blob/main/docs/server/session.md) - session management utility (**Note:** docs not ready yet)
 
-## Client Side
+## Client Side Documentation
 
-- [api](./docs/client/api.md) - api library for get/post/put/delete requests
-- [auth](./docs/client/auth.md) - 3rd party authentication utilities for client side \*\*\* **not finished yet**
-- [cache](./docs/client/cache.md) - in memory cache with expiration
+- [api](https://github.com/dokuzbit/utils/blob/main/docs/client/api.md) - api library for get/post/put/delete requests
+- [auth](https://github.com/dokuzbit/utils/blob/main/docs/client/auth.md) - 3rd party authentication utilities for client side (**Note:** docs not ready yet)
+- [cache](https://github.com/dokuzbit/utils/blob/main/docs/client/cache.md) - in memory cache with expiration (**Note:** docs not ready yet)
 
 ---
 

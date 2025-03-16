@@ -1,4 +1,4 @@
-import jwt, { type JwtPayload } from 'jsonwebtoken';
+import jwt, { type JwtPayload, type Secret, type SignOptions } from 'jsonwebtoken';
 import { merge, set } from 'lodash-es';
 import { cache } from './cache.server';
 
@@ -72,7 +72,11 @@ export class Session {
 		this.checkConfig();
 		delete data?.exp;
 		delete data?.iat;
-		const token = jwt.sign(data, this.sm.secret, { expiresIn: options?.expiresIn || this.sm.expiresIn });
+		const token = jwt.sign(
+			data,
+			this.sm.secret as Secret,
+			{ expiresIn: options?.expiresIn || this.sm.expiresIn } as SignOptions
+		);
 		this.sm.cookies?.set(options?.cookieName || this.sm.cookieName, token, {
 			path: options?.path || this.sm.path,
 			httpOnly: options?.httpOnly || this.sm.httpOnly,
