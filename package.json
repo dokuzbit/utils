@@ -15,30 +15,20 @@
     "url": "https://github.com/dokuzbit/utils/issues"
   },
   "exports": {
-    "./client": {
-      "import": "./dist/client/index.js",
-      "types": "./dist/client/index.d.ts"
-    },
-    "./server": {
-      "import": "./dist/server/index.js",
-      "types": "./dist/server/index.d.ts"
-    },
-    "./server/*": {
-      "import": "./dist/server/*.server.js",
-      "types": "./dist/server/*.server.d.ts"
-    },
-    "./client/*": {
-      "import": "./dist/client/*.js",
-      "types": "./dist/client/*.d.ts"
-    }
+    "./client": "./client/index.ts",
+    "./server": "./server/index.ts",
+    "./server/*": "./server/*.ts",
+    "./client/*": "./client/*.ts"
   },
   "scripts": {
     "test": "bun test",
     "build": "tsc",
-    "release": "bun run build && bun publish --access public"
+    "release": "bun run build && npm publish --access public"
   },
   "files": [
-    "dist"
+    "dist",
+    "client",
+    "server"
   ],
   "devDependencies": {
     "@types/bun": "^1.2.4",
