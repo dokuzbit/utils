@@ -33,16 +33,14 @@
   "devDependencies": {
     "@types/bun": "^1.2.4",
     "@types/jsonwebtoken": "^9.0.9",
-    "@types/lodash": "^4.17.16",
-    "@types/lodash-es": "^4.17.12",
     "@types/memjs": "^1.3.3",
+    "@types/trusted-types": "^2.0.7",
     "playwright": "^1.51.0"
   },
   "peerDependencies": {
     "typescript": "^5.8.2"
   },
   "dependencies": {
-    "lodash-es": "^4.17.21",
     "jsonwebtoken": "^9.0.2",
     "mariadb": "^3.4.0",
     "memjs": "^1.3.2",

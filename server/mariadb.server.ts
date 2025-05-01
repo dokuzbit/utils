@@ -1,13 +1,12 @@
 import { createPool } from 'mariadb';
 import type { Pool, PoolConnection, QueryOptions, SqlError, UpsertResult } from 'mariadb';
 import cache from './cache.server';
-import { merge, values } from 'lodash-es';
 
 
 type joinType = 'LEFT' | 'RIGHT' | 'INNER' | 'OUTER' | 'CROSS';
 type Where = string | string[] | Record<string, any> | Record<string, any>[];
 type WhereParams = any | any[];
-interface dbConfig {
+interface DBConfig {
 	host?: string;
 	user?: string;
 	password?: string;
@@ -69,9 +68,9 @@ interface UpdateParams {
  */
 export class MariaDB {
 	private pool: Pool | undefined;
-	private dbConfig: dbConfig | undefined;
+	private dbConfig: DBConfig = {};
 	private cache: typeof cache = cache;
-	constructor(dbConfig?: dbConfig) {
+	constructor(dbConfig?: DBConfig) {
 		if (dbConfig) this.config(dbConfig);
 	}
 
@@ -86,8 +85,8 @@ export class MariaDB {
 	 * @param dbConfig.trace - Database trace
 	 * 
 	 */
-	config(dbConfig: dbConfig) {
-		this.dbConfig = merge(this.dbConfig, dbConfig);
+	config(dbConfig: DBConfig) {
+		this.dbConfig = mergeDeep(this.dbConfig, dbConfig);
 		this.dbConfig.trace = dbConfig.trace || process.env.NODE_ENV === 'development';
 		this.dbConfig.connectionLimit = dbConfig.connectionLimit || 5;
 		if (!this.dbConfig || !this.dbConfig.host || !this.dbConfig.database || !this.dbConfig.user || !this.dbConfig.password) throw new Error('database, user and password are required');
@@ -117,6 +116,7 @@ export class MariaDB {
 	 * @returns {Promise<T>} - Single object NOT array
 	 */
 	public async query<T>(sql: string | QueryOptions, values?: any[] | Record<string, any>, params: Record<string, any>[] = []): Promise<T> {
+		if (!this.pool && this.dbConfig !== undefined) this.pool = createPool(this.dbConfig);
 		if (!this.pool) this.pool = createPool(this.dbConfig);
 		// Önce string sql ile object sql yapalım, böylece sonra çift kontrole gerek kalmayacak
 		if (typeof sql === 'string') sql = { sql: sql, ...params };
@@ -638,3 +638,21 @@ export class MariaDB {
 }
 export const mariadb = new MariaDB();
 export default mariadb;
+
+function mergeDeep(target: any, source: any): any {
+	if (!target) return { ...source };
+	if (!source) return { ...target };
+	const output = { ...target };
+	for (const key of Object.keys(source)) {
+		if (
+			source[key] &&
+			typeof source[key] === 'object' &&
+			!Array.isArray(source[key])
+		) {
+			output[key] = mergeDeep(target[key], source[key]);
+		} else {
+			output[key] = source[key];
+		}
+	}
+	return output;
+}
