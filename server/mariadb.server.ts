@@ -117,7 +117,7 @@ export class MariaDB {
 	 * @returns {Promise<T>} - Single object NOT array
 	 */
 	public async query<T>(sql: string | QueryOptions, values?: any[] | Record<string, any>, params: Record<string, any>[] = []): Promise<T> {
-		if (!this.pool) throw new Error('pool is not initialized');
+		if (!this.pool) this.pool = createPool(this.dbConfig);
 		// Önce string sql ile object sql yapalım, böylece sonra çift kontrole gerek kalmayacak
 		if (typeof sql === 'string') sql = { sql: sql, ...params };
 
