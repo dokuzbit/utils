@@ -1,5 +1,4 @@
 import jwt, { type JwtPayload, type Secret, type SignOptions } from 'jsonwebtoken';
-import { merge, set } from 'lodash-es';
 import { cache } from './cache.server';
 
 interface Cookies {
@@ -135,7 +134,7 @@ export class Session {
 
 	async updateToken(newPayload: any): Promise<PayloadInterface> {
 		const { payload } = await this.getToken();
-		const mergedPayload = merge(payload, newPayload);
+		const mergedPayload = mergeDeep(payload, newPayload);
 		await this.setToken(mergedPayload);
 		const remainingTime = (mergedPayload as JwtPayload).exp! - Date.now() / 1000;
 		cache.set(this.sm.cookieName, mergedPayload, remainingTime);
@@ -166,3 +165,21 @@ export class Session {
 }
 export const session = new Session;
 export default session;
+
+function mergeDeep(target: any, source: any): any {
+	if (!target) return { ...source };
+	if (!source) return { ...target };
+	const output = { ...target };
+	for (const key of Object.keys(source)) {
+		if (
+			source[key] &&
+			typeof source[key] === 'object' &&
+			!Array.isArray(source[key])
+		) {
+			output[key] = mergeDeep(target[key], source[key]);
+		} else {
+			output[key] = source[key];
+		}
+	}
+	return output;
+}
