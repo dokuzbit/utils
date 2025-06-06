@@ -25,12 +25,29 @@ interface Response<T> {
 
 export class Api {
 	private baseUrl: string;
+	private headers: Record<string, string>;
+
 	constructor(baseUrl: string = '') {
 		this.baseUrl = baseUrl;
+		this.headers = {
+			'Content-Type': 'application/json',
+		};
 	}
 
 	public setBaseUrl = (url: string) => {
 		globalApiBaseUrl = url;
+	};
+
+	public setHeader = (key: string, value: string) => {
+		this.headers[key] = value;
+	};
+
+	public removeHeader = (key: string) => {
+		delete this.headers[key];
+	};
+
+	public setHeaders = (headers: Record<string, string>) => {
+		this.headers = { ...this.headers, ...headers };
 	};
 
 	private request = async <T>(
@@ -40,9 +57,7 @@ export class Api {
 	): Promise<Response<T>> => {
 		const options: RequestInit = {
 			method: method,
-			headers: {
-				'Content-Type': 'application/json',
-			},
+			headers: this.headers,
 			body: payload ? JSON.stringify(payload) : null,
 		};
 

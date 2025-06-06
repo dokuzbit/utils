@@ -126,7 +126,12 @@ export class MariaDB {
 		let result = await this.pool.query(sql, values);
 		// Eğer result bir dizi ve tek bir eleman ise ve sql'de limit 1 varsa, o elemanı döndürelim
 		if (Array.isArray(result) && result.length === 1 && (/\blimit\s+1\b/i.test(sql.sql))) {
+			// Eğer result[0] ın tek bir key varsa, direkt value'yu döndür
+			if (Object.keys(result[0]).length === 1) return result[0][Object.keys(result[0])[0]] as T;
 			return result[0] as T;
+		}
+		if (Array.isArray(result) && result.length === 0 && (/\blimit\s+1\b/i.test(sql.sql))) {
+			return null as T;
 		}
 		// if (sql.sql.toLowerCase().includes('limit 1 ') || sql.sql.toLowerCase().endsWith('limit 1')) return result[0]
 		if (result.meta) result.meta = this.getColumnDefs(result.meta);
@@ -566,7 +571,6 @@ export class MariaDB {
 			return await this.query(sql, [`$.${path}`, ...flattenedValues]);
 		}
 	}
-
 	async findJsonValue(table: string, where: string, jsonField: string, path: string, value: any) {
 		if (!where) where = '1=1';
 		const sql = `SELECT * FROM ${table} WHERE ${where} AND JSON_VALUE(${jsonField}, ?) = ?`;
