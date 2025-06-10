@@ -19,6 +19,7 @@ interface DBConfig {
 	rowsAsArray?: boolean;
 	nestTables?: boolean;
 	bigIntAsNumber?: boolean;
+	bigNumberStrings?: boolean;
 	dateStrings?: boolean;
 }
 interface QueryParams {
