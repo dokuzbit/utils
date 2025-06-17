@@ -120,7 +120,11 @@ export class MariaDB {
 		if (!this.pool && this.dbConfig !== undefined) this.pool = createPool(this.dbConfig);
 		if (!this.pool) this.pool = createPool(this.dbConfig);
 		// Önce string sql ile object sql yapalım, böylece sonra çift kontrole gerek kalmayacak
-		if (typeof sql === 'string') sql = { sql: sql, ...params };
+		// if (typeof sql === 'string') sql = { sql: sql, ...params };
+		if (typeof sql === 'string') {
+			const options = params[0] || {};
+			sql = { sql: sql, ...options };
+		}
 
 		// Eğer values bir obje ise ve sql bir select ise namedPlaceholders'ı true yapalım
 		if (sql.sql.toLowerCase().startsWith('select') && values?.constructor === Object) sql = { ...sql, namedPlaceholders: true };
@@ -135,7 +139,7 @@ export class MariaDB {
 			return null as T;
 		}
 		// if (sql.sql.toLowerCase().includes('limit 1 ') || sql.sql.toLowerCase().endsWith('limit 1')) return result[0]
-		if (result.meta) result.meta = this.getColumnDefs(result.meta);
+		// if (result.meta) result.meta = this.getColumnDefs(result.meta);
 		return result as T;
 	}
 
