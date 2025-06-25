@@ -21,6 +21,8 @@ interface DBConfig {
 	bigIntAsNumber?: boolean;
 	bigNumberStrings?: boolean;
 	dateStrings?: boolean;
+	collation?: string;
+	charset?: string;
 }
 interface QueryParams {
 	command?: 'findFirst' | 'findMany' | 'findAll';
@@ -191,8 +193,6 @@ export class MariaDB {
 			});
 
 			// Use own batch method
-			console.log('query', query);
-			console.log('batchParams', batchParams);
 			return await this.batch(query, batchParams);
 
 		} catch (err) {
