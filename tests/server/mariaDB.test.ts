@@ -51,6 +51,18 @@ test('wrong_query', async () => {
     expect(result).toContainKeys(['error']);
 });
 
+test('wrong_objectUpdate', async () => {
+    await db.execute('use test')
+    const dataset = [
+        { id: 1, name: Math.random().toString(36).substring(2, 15), data: { color: 'white', size: 'M' } },
+        { id: 2, name: Math.random().toString(36).substring(2, 15), data: { color: 'black', size: 'L' } },
+    ]
+    const result = await db.objectUpdate({ table: "WRONG_TABLE", values: dataset });
+    console.log(result);
+    expect(result).toBeDefined();
+    expect(result).toContainKey('error');
+});
+
 test('query', async () => {
     await db.query('use test')
     await db.insert<TestResult>(TABLE1, { name: 'testQuery', data: { color: 'white', size: 'M' } })

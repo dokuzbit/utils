@@ -162,8 +162,8 @@ export class MariaDB {
 		try {
 			result = await this.pool.query(sql, values);
 		} catch (error: SqlError | any) {
-			console.error(error.sqlMessage);
-			return { error: error.sqlMessage } as QueryResult<T>;
+			console.log(error.sqlMessage);
+			return { error: error.code || 'unknown error' } as QueryResult<T>;
 		}
 		// Eğer result bir dizi ve tek bir eleman ise ve sql'de limit 1 varsa, o elemanı döndürelim
 		if (Array.isArray(result) && result.length === 1 && (/\blimit\s+1\b/i.test(sql.sql))) {
@@ -227,11 +227,18 @@ export class MariaDB {
 			});
 
 			// Use own batch method
-			return await this.batch(query, batchParams);
+			const result = await this.batch(query, batchParams);
 
-		} catch (err) {
+			// Check if result has error
+			if (result && typeof result === 'object' && 'error' in result) {
+				return result;
+			}
+
+			return result;
+
+		} catch (err: any) {
 			console.error('Batch update error:', err);
-			throw err;
+			return { error: err.message || 'Batch update failed' };
 		}
 	}
 
@@ -260,19 +267,29 @@ export class MariaDB {
 			return { affectedRows: 0, insertId: 0, warningStatus: 0 };
 		}
 
-		// All records must have the same fields
-		const keys = Object.keys(valuesArray[0]);
-		const protectedKeys = keys.map(key => this.protectFieldName(key));
+		try {
+			// All records must have the same fields
+			const keys = Object.keys(valuesArray[0]);
+			const protectedKeys = keys.map(key => this.protectFieldName(key));
 
-		// Create placeholders for each record
-		const placeholders = valuesArray.map(() => `(${keys.map(() => '?').join(',')})`).join(',');
-		const flatValues = valuesArray.flatMap(v => keys.map(k => v[k]));
+			// Create placeholders for each record
+			const placeholders = valuesArray.map(() => `(${keys.map(() => '?').join(',')})`).join(',');
+			const flatValues = valuesArray.flatMap(v => keys.map(k => v[k]));
 
-		// Create SQL query
-		const sql = `INSERT INTO ${table} (${protectedKeys.join(',')}) VALUES ${placeholders}`;
-		const result = await this.execute(sql, flatValues);
+			// Create SQL query
+			const sql = `INSERT INTO ${table} (${protectedKeys.join(',')}) VALUES ${placeholders}`;
+			const result = await this.execute(sql, flatValues);
 
-		return result;
+			// Check if result has error
+			if (result && typeof result === 'object' && 'error' in result) {
+				return result;
+			}
+
+			return result;
+		} catch (err: any) {
+			console.error('Insert error:', err);
+			return { error: err.message || 'Insert failed' };
+		}
 	}
 
 
@@ -293,18 +310,31 @@ export class MariaDB {
 	 */
 
 	public async upsert<T>(table: string, values: Record<string, any>, update: Record<string, any>): Promise<any> {
-		const keys = Object.keys(values);
-		const updateKeys = Object.keys(update);
+		try {
+			const keys = Object.keys(values);
+			const updateKeys = Object.keys(update);
 
-		// Alan isimlerini koruma uygula
-		const protectedKeys = keys.map(key => this.protectFieldName(key));
+			// Alan isimlerini koruma uygula
+			const protectedKeys = keys.map(key => this.protectFieldName(key));
 
-		const sql = `INSERT INTO ${table} (${protectedKeys.join(',')}) VALUES (${keys
-			.map(() => `?`)
-			.join(',')}) ON DUPLICATE KEY UPDATE ${updateKeys
-				.map((key) => `${this.protectFieldName(key)} = ?`)
-				.join(',')}`;
-		return await this.query(sql, [...Object.values(values), ...Object.values(update)]);
+			const sql = `INSERT INTO ${table} (${protectedKeys.join(',')}) VALUES (${keys
+				.map(() => `?`)
+				.join(',')}) ON DUPLICATE KEY UPDATE ${updateKeys
+					.map((key) => `${this.protectFieldName(key)} = ?`)
+					.join(',')}`;
+
+			const result = await this.query(sql, [...Object.values(values), ...Object.values(update)]);
+
+			// Check if result has error
+			if (result && typeof result === 'object' && 'error' in result) {
+				return result;
+			}
+
+			return result;
+		} catch (err: any) {
+			console.error('Upsert error:', err);
+			return { error: err.message || 'Upsert failed' };
+		}
 	}
 
 
@@ -323,34 +353,58 @@ export class MariaDB {
 	 * const result = await db.delete('users', 'id = 1', [1, 2, 3]);
 	 */
 	async delete<T>(table: string, where: string, params: any[] = []): Promise<UpsertResult> {
-		if (!table || !where) throw new Error('table and where is required');
-		const sql = `DELETE FROM ${table} WHERE ${where}`;
-		return await this.execute(sql, params);
+		if (!table || !where) return { error: 'table and where is required' };
+
+		try {
+			const sql = `DELETE FROM ${table} WHERE ${where}`;
+			const result = await this.execute(sql, params);
+
+			// Check if result has error
+			if (result && typeof result === 'object' && 'error' in result) {
+				return result;
+			}
+
+			return result;
+		} catch (err: any) {
+			console.error('Delete error:', err);
+			return { error: err.message || 'Delete failed' };
+		}
 	}
 
 
 
 	async update(params: UpdateParams): Promise<UpsertResult> {
 		const { table, values, where, whereParams = [] } = params;
-		if (!table || !values || !where) throw new Error('table, values, where is required');
+		if (!table || !values || !where) return { error: 'table, values, where is required' };
 
-		// Güncellenecek değerler object veya object array olabilir
-		const valuesArray = Array.isArray(values) ? values : [values];
-		if (valuesArray.length === 0) throw new Error('values is empty');
+		try {
+			// Güncellenecek değerler object veya object array olabilir
+			const valuesArray = Array.isArray(values) ? values : [values];
+			if (valuesArray.length === 0) return { error: 'values is empty' };
 
-		const setValues = valuesArray.map(obj => {
-			return Object.keys(obj).map(key => `${this.protectFieldName(key)} = ?`).join(', ');
-		});
+			const setValues = valuesArray.map(obj => {
+				return Object.keys(obj).map(key => `${this.protectFieldName(key)} = ?`).join(', ');
+			});
 
-		const whereClause = this.buildWhere(where);
-		const whereParamsProcessed = this.buildWhereParams(where, whereParams);
+			const whereClause = this.buildWhere(where);
+			const whereParamsProcessed = this.buildWhereParams(where, whereParams);
 
-		// Update için SQL hazırla
-		let sql = `UPDATE ${table} SET ${setValues.join(', ')} WHERE ${whereClause}`;
+			// Update için SQL hazırla
+			let sql = `UPDATE ${table} SET ${setValues.join(', ')} WHERE ${whereClause}`;
 
-		const placeholders = valuesArray.flatMap(Object.values);
-		const result = await this.query<UpsertResult>(sql, [...placeholders, ...whereParamsProcessed]);
-		return Array.isArray(result) ? result[0] : result;
+			const placeholders = valuesArray.flatMap(Object.values);
+			const result = await this.query<UpsertResult>(sql, [...placeholders, ...whereParamsProcessed]);
+
+			// Check if result has error
+			if (result && typeof result === 'object' && 'error' in result) {
+				return result;
+			}
+
+			return Array.isArray(result) ? result[0] : result;
+		} catch (err: any) {
+			console.error('Update error:', err);
+			return { error: err.message || 'Update failed' };
+		}
 	}
 
 
@@ -358,95 +412,106 @@ export class MariaDB {
 	// TODO: chunk & asArray ???
 	async select(params: QueryParams): Promise<any> {
 		const { command = 'findMany', select = '*', from, join, joinType, where, whereParams, order, group, limit, page = 1, offset, chunk, options, asArray = false } = params;
-		if (!from) throw new Error('from is required');
+		if (!from) return { error: 'from is required' };
 
-		// Select field oluştur
-		let selectClause: string;
-		if (select === '*') {
-			selectClause = '*';
-		} else if (Array.isArray(select)) {
-			selectClause = select.map(s => {
-				// Eğer s bir string değil ise boş string dön
-				if (typeof s !== 'string') return '';
-				// Eğer s "as" içeriyor ise
-				if (s.includes(' as ')) return s;
-				// Eğer s "." ve "(" içeriyor ise, s'i doğrudan döndürelim
-				if (s.includes('.') || s.includes('(')) return s;
-				return this.protectFieldName(s);
-			}).join(', ');
-		} else if (typeof select === 'string') {
-			if (select.includes(',')) {
-				selectClause = select.split(',').map(s => {
-					s = s.trim();
+		try {
+			// Select field oluştur
+			let selectClause: string;
+			if (select === '*') {
+				selectClause = '*';
+			} else if (Array.isArray(select)) {
+				selectClause = select.map(s => {
+					// Eğer s bir string değil ise boş string dön
+					if (typeof s !== 'string') return '';
 					// Eğer s "as" içeriyor ise
 					if (s.includes(' as ')) return s;
-					// Eğer s "." içeriyor ise veya "(" içeriyorsa, doğrudan döndür
+					// Eğer s "." ve "(" içeriyor ise, s'i doğrudan döndürelim
 					if (s.includes('.') || s.includes('(')) return s;
 					return this.protectFieldName(s);
 				}).join(', ');
+			} else if (typeof select === 'string') {
+				if (select.includes(',')) {
+					selectClause = select.split(',').map(s => {
+						s = s.trim();
+						// Eğer s "as" içeriyor ise
+						if (s.includes(' as ')) return s;
+						// Eğer s "." içeriyor ise veya "(" içeriyorsa, doğrudan döndür
+						if (s.includes('.') || s.includes('(')) return s;
+						return this.protectFieldName(s);
+					}).join(', ');
+				} else {
+					selectClause = select;
+				}
 			} else {
-				selectClause = select;
+				return { error: 'select must be string or array' };
 			}
-		} else {
-			throw new Error('select must be string or array');
-		}
 
-		// From kısmını hazırla, from array ise virguller ile ayır
-		let fromClause: string;
-		if (Array.isArray(from)) {
-			fromClause = from.join(', ');
-		} else {
-			fromClause = from;
-		}
+			// From kısmını hazırla, from array ise virguller ile ayır
+			let fromClause: string;
+			if (Array.isArray(from)) {
+				fromClause = from.join(', ');
+			} else {
+				fromClause = from;
+			}
 
-		// Join kısmını hazırla
-		let joinClause = '';
-		if (join && join.length > 0) {
-			const joins = Array.isArray(join) ? join : [join];
-			const joinTypes = Array.isArray(joinType) ? joinType : joinType ? [joinType] : Array(joins.length).fill('LEFT');
+			// Join kısmını hazırla
+			let joinClause = '';
+			if (join && join.length > 0) {
+				const joins = Array.isArray(join) ? join : [join];
+				const joinTypes = Array.isArray(joinType) ? joinType : joinType ? [joinType] : Array(joins.length).fill('LEFT');
 
-			joinClause = joins.map((j, i) => {
-				return `${joinTypes[i] || 'LEFT'} JOIN ${j}`;
-			}).join(' ');
-		}
+				joinClause = joins.map((j, i) => {
+					return `${joinTypes[i] || 'LEFT'} JOIN ${j}`;
+				}).join(' ');
+			}
 
-		// Where kısmını hazırla
-		let whereClause = '';
-		if (where) {
-			whereClause = `WHERE ${this.buildWhere(where)}`;
-		}
+			// Where kısmını hazırla
+			let whereClause = '';
+			if (where) {
+				whereClause = `WHERE ${this.buildWhere(where)}`;
+			}
 
-		// Order kısmını hazırla
-		let orderClause = '';
-		if (order) {
-			// Eğer order bir array değil ise, stringe çevir ve virgüller ile ayır
-			const orderArray = Array.isArray(order) ? order : order.split(',');
-			orderClause = `ORDER BY ${orderArray.join(', ')}`;
-		}
+			// Order kısmını hazırla
+			let orderClause = '';
+			if (order) {
+				// Eğer order bir array değil ise, stringe çevir ve virgüller ile ayır
+				const orderArray = Array.isArray(order) ? order : order.split(',');
+				orderClause = `ORDER BY ${orderArray.join(', ')}`;
+			}
 
-		// Group kısmını hazırla
-		let groupClause = '';
-		if (group) {
-			const groups = Array.isArray(group) ? group : [group];
-			groupClause = `GROUP BY ${groups.join(', ')}`;
-		}
+			// Group kısmını hazırla
+			let groupClause = '';
+			if (group) {
+				const groups = Array.isArray(group) ? group : [group];
+				groupClause = `GROUP BY ${groups.join(', ')}`;
+			}
 
-		// Limit ve offset kısmını hazırla
-		let limitClause = '';
-		if (limit) {
-			// Offset limit * (page - 1) olarak hesaplanır
-			const offsetValue = offset || (limit * (page - 1));
-			limitClause = `LIMIT ${offsetValue}, ${limit}`;
-		}
+			// Limit ve offset kısmını hazırla
+			let limitClause = '';
+			if (limit) {
+				// Offset limit * (page - 1) olarak hesaplanır
+				const offsetValue = offset || (limit * (page - 1));
+				limitClause = `LIMIT ${offsetValue}, ${limit}`;
+			}
 
-		// Query oluştur
-		const sql = `SELECT ${selectClause} FROM ${fromClause} ${joinClause} ${whereClause} ${groupClause} ${orderClause} ${limitClause}`.trim().replace(/\s+/g, ' ');
-		const result = await this.query(sql, whereParams || [], options || {});
-		// findFirst should return first row
-		if (command === 'findFirst' && Array.isArray(result) && result.length > 0) {
-			return asArray ? [result[0]] : result[0];
+			// Query oluştur
+			const sql = `SELECT ${selectClause} FROM ${fromClause} ${joinClause} ${whereClause} ${groupClause} ${orderClause} ${limitClause}`.trim().replace(/\s+/g, ' ');
+			const result = await this.query(sql, whereParams || [], options || {});
+
+			// Check if result has error
+			if (result && typeof result === 'object' && 'error' in result) {
+				return result;
+			}
+
+			// findFirst should return first row
+			if (command === 'findFirst' && Array.isArray(result) && result.length > 0) {
+				return asArray ? [result[0]] : result[0];
+			}
+			return result;
+		} catch (err: any) {
+			console.error('Select error:', err);
+			return { error: err.message || 'Select failed' };
 		}
-		return result;
 	}
 
 	// TODO: refactor smilar to pagination and itteratable
@@ -486,16 +551,29 @@ export class MariaDB {
 	public async execute(sql: string | QueryOptions, values?: any, params: Record<string, any>[] = []): Promise<any> {
 		if (!this.pool) return { error: 'pool is not initialized' };
 		if (params.length > 0 && typeof sql === 'string') sql = { sql: sql, ...params };
-		return await this.pool.execute(sql, values);
+
+		try {
+			const result = await this.pool.execute(sql, values);
+			return result;
+		} catch (error: SqlError | any) {
+			console.log(error.sqlMessage);
+			return { error: error.code || 'unknown error' };
+		}
 	}
 
 	public async batch(sql: string | QueryOptions, values?: any[], params: Record<string, any>[] = []): Promise<UpsertResult> {
-		if (!this.pool) throw new Error('pool is not initialized');
+		if (!this.pool) return { error: 'pool is not initialized' };
 		if (params.length > 0 && typeof sql === 'string') sql = { sql: sql, ...params };
-		const conn = await this.pool.getConnection();
-		const result = await conn.batch<UpsertResult>(sql, values);
-		conn.release();
-		return result;
+
+		try {
+			const conn = await this.pool.getConnection();
+			const result = await conn.batch<UpsertResult>(sql, values);
+			conn.release();
+			return result;
+		} catch (error: SqlError | any) {
+			console.log(error.sqlMessage);
+			return { error: error.code || 'unknown error' };
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------------
@@ -580,61 +658,154 @@ export class MariaDB {
 
 
 	async getJsonValue(table: string, where: string, jsonField: string, path: string = '*') {
-		const sql = `SELECT JSON_VALUE(${jsonField}, ?) as value FROM ${table} WHERE ${where} LIMIT 1`;
-		return await this.query(sql, [`$.${path}`]);
+		try {
+			const sql = `SELECT JSON_VALUE(${jsonField}, ?) as value FROM ${table} WHERE ${where} LIMIT 1`;
+			const result = await this.query(sql, [`$.${path}`]);
+
+			// Check if result has error
+			if (result && typeof result === 'object' && 'error' in result) {
+				return result;
+			}
+
+			return result;
+		} catch (err: any) {
+			console.error('getJsonValue error:', err);
+			return { error: err.message || 'getJsonValue failed' };
+		}
 	}
 
 	async getJsonExtract(table: string, where: string, jsonField: string, path: string = '') {
-		const sql = `SELECT JSON_EXTRACT(${jsonField}, ?) as value FROM ${table} WHERE ${where} LIMIT 1`;
-		const result = await this.query<{ value: any }>(sql, [path ? `$.${path}` : '$']);
-		return Array.isArray(result) ? result[0]?.value : result;
+		try {
+			const sql = `SELECT JSON_EXTRACT(${jsonField}, ?) as value FROM ${table} WHERE ${where} LIMIT 1`;
+			const result = await this.query<{ value: any }>(sql, [path ? `$.${path}` : '$']);
+
+			// Check if result has error
+			if (result && typeof result === 'object' && 'error' in result) {
+				return result;
+			}
+
+			return Array.isArray(result) ? result[0]?.value : result;
+		} catch (err: any) {
+			console.error('getJsonExtract error:', err);
+			return { error: err.message || 'getJsonExtract failed' };
+		}
 	}
 
 	async setJsonValue(table: string, where: string, jsonField: string, path: string, value: any) {
-		if (!where) throw new Error('where is required');
-		const sql = `UPDATE ${table} SET ${jsonField} = JSON_SET(${jsonField}, ?, ?) WHERE ${where}`;
-		return await this.query(sql, [`$.${path}`, value]);
-	}
-	async setJsonObject(table: string, where: string, jsonField: string, path: string, value: Record<string, any>) {
-		if (!where) throw new Error('where is required');
-		let flattenedValues: any;
-		if (Array.isArray(value)) {
-			flattenedValues = value.flat();
-			const sql = `UPDATE ${table} SET ${jsonField} = JSON_SET(${jsonField}, ?, JSON_ARRAY(${flattenedValues})) WHERE ${where}`;
-			return await this.query(sql, [`$.${path}`, ...flattenedValues]);
-		} else {
-			flattenedValues = Object.entries(value).flat();
-			const sql = `UPDATE ${table} SET ${jsonField} = JSON_SET(${jsonField}, ?, JSON_OBJECT(${Array(flattenedValues.length / 2)
-				.fill('?,?')
-				.join(',')})) WHERE ${where}`;
-			return await this.query(sql, [`$.${path}`, ...flattenedValues]);
+		if (!where) return { error: 'where is required' };
+
+		try {
+			const sql = `UPDATE ${table} SET ${jsonField} = JSON_SET(${jsonField}, ?, ?) WHERE ${where}`;
+			const result = await this.query(sql, [`$.${path}`, value]);
+
+			// Check if result has error
+			if (result && typeof result === 'object' && 'error' in result) {
+				return result;
+			}
+
+			return result;
+		} catch (err: any) {
+			console.error('setJsonValue error:', err);
+			return { error: err.message || 'setJsonValue failed' };
 		}
 	}
+
+	async setJsonObject(table: string, where: string, jsonField: string, path: string, value: Record<string, any>) {
+		if (!where) return { error: 'where is required' };
+
+		try {
+			let flattenedValues: any;
+			if (Array.isArray(value)) {
+				flattenedValues = value.flat();
+				const sql = `UPDATE ${table} SET ${jsonField} = JSON_SET(${jsonField}, ?, JSON_ARRAY(${flattenedValues})) WHERE ${where}`;
+				const result = await this.query(sql, [`$.${path}`, ...flattenedValues]);
+
+				// Check if result has error
+				if (result && typeof result === 'object' && 'error' in result) {
+					return result;
+				}
+
+				return result;
+			} else {
+				flattenedValues = Object.entries(value).flat();
+				const sql = `UPDATE ${table} SET ${jsonField} = JSON_SET(${jsonField}, ?, JSON_OBJECT(${Array(flattenedValues.length / 2)
+					.fill('?,?')
+					.join(',')})) WHERE ${where}`;
+				const result = await this.query(sql, [`$.${path}`, ...flattenedValues]);
+
+				// Check if result has error
+				if (result && typeof result === 'object' && 'error' in result) {
+					return result;
+				}
+
+				return result;
+			}
+		} catch (err: any) {
+			console.error('setJsonObject error:', err);
+			return { error: err.message || 'setJsonObject failed' };
+		}
+	}
+
 	async findJsonValue(table: string, where: string, jsonField: string, path: string, value: any) {
-		if (!where) where = '1=1';
-		const sql = `SELECT * FROM ${table} WHERE ${where} AND JSON_VALUE(${jsonField}, ?) = ?`;
-		return await this.query(sql, [`$.${path}`, value]);
+		try {
+			if (!where) where = '1=1';
+			const sql = `SELECT * FROM ${table} WHERE ${where} AND JSON_VALUE(${jsonField}, ?) = ?`;
+			const result = await this.query(sql, [`$.${path}`, value]);
+
+			// Check if result has error
+			if (result && typeof result === 'object' && 'error' in result) {
+				return result;
+			}
+
+			return result;
+		} catch (err: any) {
+			console.error('findJsonValue error:', err);
+			return { error: err.message || 'findJsonValue failed' };
+		}
 	}
 
 	async beginTransaction(): Promise<void> {
-		if (!this.pool) throw new Error('Pool is not initialized');
-		await this.pool.query('BEGIN');
+		if (!this.pool) return { error: 'Pool is not initialized' } as any;
+
+		try {
+			await this.pool.query('BEGIN');
+		} catch (error: SqlError | any) {
+			console.error('beginTransaction error:', error.sqlMessage);
+			return { error: error.sqlMessage } as any;
+		}
 	}
 
 	async commit(): Promise<void> {
-		if (!this.pool) throw new Error('Pool is not initialized');
-		await this.pool.query('COMMIT');
+		if (!this.pool) return { error: 'Pool is not initialized' } as any;
+
+		try {
+			await this.pool.query('COMMIT');
+		} catch (error: SqlError | any) {
+			console.error('commit error:', error.sqlMessage);
+			return { error: error.sqlMessage } as any;
+		}
 	}
 
 	async rollback(): Promise<void> {
-		if (!this.pool) throw new Error('Pool is not initialized');
-		await this.pool.query('ROLLBACK');
+		if (!this.pool) return { error: 'Pool is not initialized' } as any;
+
+		try {
+			await this.pool.query('ROLLBACK');
+		} catch (error: SqlError | any) {
+			console.error('rollback error:', error.sqlMessage);
+			return { error: error.sqlMessage } as any;
+		}
 	}
 
 
 
 	async close(): Promise<void> {
-		if (this.pool) await this.pool.end();
+		try {
+			if (this.pool) await this.pool.end();
+		} catch (error: SqlError | any) {
+			console.error('close error:', error.sqlMessage);
+			return { error: error.sqlMessage } as any;
+		}
 	}
 
 	private getColumnDefs(meta: any[]): any[] {
