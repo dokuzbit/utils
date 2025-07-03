@@ -1,7 +1,5 @@
 import { expect, test } from 'bun:test';
 import db from '../../server/mariadb.server';
-import { merge } from 'lodash';
-import { SqlError, type TypeCastResult, type UpsertResult } from 'mariadb';
 
 const { DB_HOST, DB_USER, DB_PASS, DB_NAME, TABLE1, TABLE2 } = process.env;
 
@@ -44,6 +42,13 @@ test('setup db', async () => {
     for (const sql of initSql) {
         await db.query(sql);
     }
+});
+
+test('wrong_query', async () => {
+    await db.query('use test')
+    const result = await db.query("select * from wrong_table")
+    expect(result).toBeDefined();
+    expect(result).toContainKeys(['error']);
 });
 
 test('query', async () => {

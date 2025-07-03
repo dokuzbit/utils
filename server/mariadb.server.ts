@@ -1,11 +1,39 @@
-import { createPool } from 'mariadb';
-import type { Pool, PoolConnection, QueryOptions, SqlError, UpsertResult } from 'mariadb';
+import { createPool, type Pool } from 'mariadb';
 import cache from './cache.server';
 
+type QueryOptions = {
+	sql: string;
+	namedPlaceholders?: boolean;
+	rowsAsArray?: boolean;
+	nestTables?: boolean | string;
+	dateStrings?: boolean;
+	bigIntAsNumber?: boolean;
+	insertIdAsNumber?: boolean;
+	decimalAsNumber?: boolean;
+	trace?: boolean;
+	timeout?: number;
+}
 
-type joinType = 'LEFT' | 'RIGHT' | 'INNER' | 'OUTER' | 'CROSS';
+type SqlError = {
+	code: string;
+	errno: number;
+	fatal: boolean;
+	sql?: string;
+	sqlState?: string;
+	sqlMessage?: string;
+}
+
+type UpsertResult = {
+	affectedRows: number;
+	insertId: number | bigint;
+	warningStatus: number;
+} | { error: string };
+
+type joinType = 'LEFT' | 'RIGHT' | 'INNER'
+	| 'OUTER' | 'CROSS';
 type Where = string | string[] | Record<string, any> | Record<string, any>[];
 type WhereParams = any | any[];
+type QueryResult<T> = T | { error: string };
 interface DBConfig {
 	host?: string;
 	user?: string;
@@ -118,7 +146,7 @@ export class MariaDB {
 	 * const result = await db.query({ sql: 'SELECT * FROM users WHERE id = :id limit 1', namedPlaceholders: true }, { id: 1 });
 	 * @returns {Promise<T>} - Single object NOT array
 	 */
-	public async query<T>(sql: string | QueryOptions, values?: any[] | Record<string, any>, params: Record<string, any>[] = []): Promise<T> {
+	public async query<T>(sql: string | QueryOptions, values?: any[] | Record<string, any>, params: Record<string, any>[] = []): Promise<QueryResult<T>> {
 		if (!this.pool && this.dbConfig !== undefined) this.pool = createPool(this.dbConfig);
 		if (!this.pool) this.pool = createPool(this.dbConfig);
 		// Önce string sql ile object sql yapalım, böylece sonra çift kontrole gerek kalmayacak
@@ -130,7 +158,13 @@ export class MariaDB {
 
 		// Eğer values bir obje ise ve sql bir select ise namedPlaceholders'ı true yapalım
 		if (sql.sql.toLowerCase().startsWith('select') && values?.constructor === Object) sql = { ...sql, namedPlaceholders: true };
-		let result = await this.pool.query(sql, values);
+		let result
+		try {
+			result = await this.pool.query(sql, values);
+		} catch (error: SqlError | any) {
+			console.error(error.sqlMessage);
+			return { error: error.sqlMessage } as QueryResult<T>;
+		}
 		// Eğer result bir dizi ve tek bir eleman ise ve sql'de limit 1 varsa, o elemanı döndürelim
 		if (Array.isArray(result) && result.length === 1 && (/\blimit\s+1\b/i.test(sql.sql))) {
 			// Eğer result[0] ın tek bir key varsa, direkt value'yu döndür
@@ -553,7 +587,7 @@ export class MariaDB {
 	async getJsonExtract(table: string, where: string, jsonField: string, path: string = '') {
 		const sql = `SELECT JSON_EXTRACT(${jsonField}, ?) as value FROM ${table} WHERE ${where} LIMIT 1`;
 		const result = await this.query<{ value: any }>(sql, [path ? `$.${path}` : '$']);
-		return Array.isArray(result) ? result[0]?.value : result?.value;
+		return Array.isArray(result) ? result[0]?.value : result;
 	}
 
 	async setJsonValue(table: string, where: string, jsonField: string, path: string, value: any) {
@@ -642,6 +676,14 @@ export class MariaDB {
 		}
 
 		return fieldName;
+	}
+
+	// Helper function to handle query results
+	private handleQueryResult<T>(result: QueryResult<T>): T {
+		if (result && typeof result === 'object' && 'error' in result) {
+			throw new Error(result.error);
+		}
+		return result as T;
 	}
 
 }
