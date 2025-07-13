@@ -146,7 +146,7 @@ export class MariaDB {
 	 * const result = await db.query({ sql: 'SELECT * FROM users WHERE id = :id limit 1', namedPlaceholders: true }, { id: 1 });
 	 * @returns {Promise<T>} - Single object NOT array
 	 */
-	public async query<T>(sql: string | QueryOptions, values?: any[] | Record<string, any>, params: Record<string, any>[] = []): Promise<QueryResult<T>> {
+	public async query<T>(sql: string | QueryOptions, values?: any[] | Record<string, any>, params: Record<string, any>[] = []): Promise<T | { error: string }> {
 		if (!this.pool && this.dbConfig !== undefined) this.pool = createPool(this.dbConfig);
 		if (!this.pool) this.pool = createPool(this.dbConfig);
 		// Önce string sql ile object sql yapalım, böylece sonra çift kontrole gerek kalmayacak
