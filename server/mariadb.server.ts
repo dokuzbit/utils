@@ -27,7 +27,7 @@ type UpsertResult = {
 	affectedRows: number;
 	insertId: number | bigint;
 	warningStatus: number;
-} | { error: string };
+} | { error: string } | null;
 
 type joinType = 'LEFT' | 'RIGHT' | 'INNER'
 	| 'OUTER' | 'CROSS';
@@ -849,13 +849,6 @@ export class MariaDB {
 		return fieldName;
 	}
 
-	// Helper function to handle query results
-	private handleQueryResult<T>(result: QueryResult<T>): T {
-		if (result && typeof result === 'object' && 'error' in result) {
-			throw new Error(result.error);
-		}
-		return result as T;
-	}
 
 }
 export const mariadb = new MariaDB();
