@@ -1,20 +1,32 @@
 /**
- * @version 0.1.1
+ * @version 0.2.12
  * Cache sınıfı, bellekte verileri saklamak ve erişim hızını artırmak için kullanılır.
  * 
  * @method set: Veriyi cache'e ekler.
+ * @param key: Cache'e eklenen verinin anahtarı.
+ * @param value: Cache'e eklenen veri.
+ * @param ttl: Cache'teki verinin süresi. (saniye)
+ * @param expireDate: Cache'teki verinin süresi. (ISO formatında veya + 1s, +1m, +1h, +1d, +1w)
  * @method get: Cache'teki veriyi döndürür.
  * @method getMeta: Cache'teki verinin meta bilgilerini döndürür.
+ * @method remove: Cache'teki veriyi siler.
  * @method clear: Cache'i temizler.
  * @method getSize: Cache'teki verilerin toplam boyutunu döndürür.
  */
 
 
+import { Database } from "bun:sqlite";
+const cacheDB = new Database(process.env.NODE_ENV === 'production' ? "/www/sqlite/cache.db" : "cache.db");
+// cacheDB.exec("pragma journal_mode = WAL;");
+cacheDB.exec("CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT, expireDate TEXT);");
+
 interface CacheItem<T> {
     value: T;
     size: number;
     expiryTime: number;
-    timeStamp: number
+    timeStamp: number;
+    expireDate: string;
+
 }
 
 class CacheNode<T> {
@@ -70,7 +82,27 @@ export class Cache<T> {
         return date.toISOString().slice(0, 19).replace('T', ' ');
     }
 
-    public set(key: string, value: T, ttl?: number): void {
+    public set(key: string, value: T, ttl?: number, expireDate?: string): void {
+
+        // Eğer expireDate bir tarih ise ve bugünden büyükse, o tarihi kullan.
+        // Eğer + ile başlıyorsa, o kadar saniye dakika saat gün veya ay ekle.
+        if (expireDate && expireDate.startsWith('+')) {
+            const multiplier = {
+                s: 1,
+                m: 60,
+                h: 3600,
+                d: 86400,
+                w: 604800,
+            }
+            // expireDate in sonuncu harfini al
+            const timeScale = expireDate.replace('+', '').slice(-1);
+            const timeValue = expireDate.replace('+', '').slice(0, -1);
+            expireDate = new Date(Date.now() + parseInt(timeValue) * 1000 * multiplier[timeScale as keyof typeof multiplier]).toISOString();
+        } else if (expireDate) {
+            expireDate = new Date(expireDate).toISOString();
+        }
+
+
         this.removeExpired();
         this.removeUntilFreeSpace();
 
@@ -94,7 +126,8 @@ export class Cache<T> {
             value,
             size: valueSize,
             expiryTime,
-            timeStamp: Math.floor(new Date(now).getTime() / 1000)
+            timeStamp: Math.floor(new Date(now).getTime() / 1000),
+            expireDate: expireDate ?? ''
         });
         this.cache.set(key, newNode);
         this.addNodeToHead(newNode);
@@ -105,17 +138,43 @@ export class Cache<T> {
         this.removeExpired();
 
         const node = this.cache.get(key);
-        if (!node) return null;
+        if (!node) {
+            const dbNode: any = cacheDB.prepare("SELECT value, expireDate FROM cache WHERE key = ? AND datetime(expireDate) > datetime('now')").get(key);
+            if (dbNode) {
+                console.log("found on db")
+                const newNode = new CacheNode<T>(key, {
+                    value: JSON.parse(dbNode.value),
+                    size: this.calculateSize(JSON.parse(dbNode.value)),
+                    expiryTime: new Date(dbNode.expireDate).getTime(),
+                    timeStamp: Math.floor(new Date(dbNode.expireDate).getTime() / 1000),
+                    expireDate: dbNode.expireDate
+                });
+                this.cache.set(key, newNode);
+                this.addNodeToHead(newNode);
+                this.currentSize += newNode.value.size;
+                return newNode.value.value;
+            }
+        } else {
 
-        // Düğümü başa taşı
-        this.removeNode(node);
-        this.addNodeToHead(node);
+            // Düğümü başa taşı
+            this.removeNode(node);
+            this.addNodeToHead(node);
 
-        return node.value.value;
+            return node.value.value;
+        }
+
+        return null;
     }
 
     public remove(key: string): void {
         this.removeExpired();
+
+        const node = this.cache.get(key);
+        // Eğer expireDate varsa veritabanından sil.
+        if (node?.value.expireDate) {
+            cacheDB.prepare("DELETE FROM cache WHERE key = ?").run(key);
+        }
+
         if (this.cache.has(key)) {
             this.currentSize -= this.cache.get(key)!.value.size;
             this.removeNode(this.cache.get(key)!);
@@ -137,12 +196,17 @@ export class Cache<T> {
         const now = Date.now();
         for (const [key, node] of this.cache.entries()) {
             if (node.value.expiryTime <= now) {
+                if (node.value.expireDate) {
+                    cacheDB.prepare("INSERT INTO cache (key, value, expireDate) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = ?, expireDate = ?").run(key, JSON.stringify(node.value.value), node.value.expireDate, JSON.stringify(node.value.value), node.value.expireDate);
+                }
                 this.currentSize -= node.value.size;
                 this.removeNode(node);
                 this.cache.delete(key);
-                console.log('🗑️ src/lib/server/cache.ts 👉 106 👀 expired ➤ ', key);
+                console.log('🗑️ src/lib/server/cache.ts 👉 154 👀 expired ➤ ', key);
             }
         }
+        // Veritamanında expireDate'i geçmiş verileri sil.
+        cacheDB.prepare("DELETE FROM cache WHERE datetime(expireDate) < datetime('now')").run();
     }
 
     private removeUntilFreeSpace(): void {

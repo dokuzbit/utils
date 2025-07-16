@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.12] - 2025-07-17
+
+### Changed
+
+- cache.server.ts now uses expireDate to keep cache data in sqlite database until expireDate.
+
 ## [0.2.11] - 2025-07-03
 
 ### Changed

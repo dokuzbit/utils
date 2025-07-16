@@ -33,7 +33,7 @@ type joinType = 'LEFT' | 'RIGHT' | 'INNER'
 	| 'OUTER' | 'CROSS';
 type Where = string | string[] | Record<string, any> | Record<string, any>[];
 type WhereParams = any | any[];
-type QueryResult<T> = T | { error: string };
+type QueryResult<T> = T | null;
 interface DBConfig {
 	host?: string;
 	user?: string;
@@ -146,7 +146,7 @@ export class MariaDB {
 	 * const result = await db.query({ sql: 'SELECT * FROM users WHERE id = :id limit 1', namedPlaceholders: true }, { id: 1 });
 	 * @returns {Promise<T>} - Single object NOT array
 	 */
-	public async query<T>(sql: string | QueryOptions, values?: any[] | Record<string, any>, params: Record<string, any>[] = []): Promise<T | { error: string }> {
+	public async query<T>(sql: string | QueryOptions, values?: any[] | Record<string, any>, params: Record<string, any>[] = []): Promise<T | null> {
 		if (!this.pool && this.dbConfig !== undefined) this.pool = createPool(this.dbConfig);
 		if (!this.pool) this.pool = createPool(this.dbConfig);
 		// Önce string sql ile object sql yapalım, böylece sonra çift kontrole gerek kalmayacak
@@ -163,7 +163,7 @@ export class MariaDB {
 			result = await this.pool.query(sql, values);
 		} catch (error: SqlError | any) {
 			console.log(error.sqlMessage);
-			return { error: error.code || 'unknown error' } as QueryResult<T>;
+			return null as QueryResult<T>;
 		}
 		// Eğer result bir dizi ve tek bir eleman ise ve sql'de limit 1 varsa, o elemanı döndürelim
 		if (Array.isArray(result) && result.length === 1 && (/\blimit\s+1\b/i.test(sql.sql))) {

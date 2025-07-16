@@ -32,12 +32,17 @@ cache.config(options);
 - key: `string` - The unique identifier for the cached item
 - value: `T` - The data to be cached
 - ttl?: `number` - Optional Time-To-Live in seconds (uses defaultTTL if not specified)
+- expireDate?: `string` - Optional expire date in ISO format or relative time (e.g. "+1s", "+1m", "+1h", "+1d", "+1w") to store data in sqlite (only Bun for now)
 - returns: `void`
 
 ```ts
 cache.set("user-123", { name: "John", age: 30 });
 // or with custom TTL
 cache.set("temp-data", data, 60); // expires in 60 seconds
+// or with expire date
+cache.set("temp-data", data, 60, "+1h"); // expires in 60 seconds, then keep in sqlite for 1 hour
+// or with expire date in sqlite
+cache.set("temp-data", data, 60, "2025-12-2"); // expires in 60 seconds, then keep in sqlite until 2025-12-2
 ```
 
 ## .get(key) - Retrieve data from cache
