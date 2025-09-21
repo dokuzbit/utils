@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.13] - 2025-09-22
+
+### Changed
+
+- added client/nats.ts
+- added nkey support to nats.server.ts
+
+### Bug Fixes
+
+- nats.request throw error if response is not a valid JSON. Now it returns text or object depending on service response.
+
 ## [0.2.12] - 2025-07-17
 
 ### Changed

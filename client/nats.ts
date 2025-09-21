@@ -78,6 +78,8 @@ export class NatsWrapper {
 			? this.sc.encode(data)
 			: this.jc.encode(data);
 		const response = await this.nc!.request(subject, encodedData, options);
+
+		// Response'u önce JSON olarak decode etmeye çalış, başarısız olursa string olarak decode et
 		try {
 			return this.jc.decode(response.data);
 		} catch (error) {
