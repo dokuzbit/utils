@@ -1,5 +1,5 @@
-import { connect, nkeyAuthenticator, StringCodec, JSONCodec } from 'nats';
-import type { NatsConnection, Subscription, PublishOptions, RequestOptions } from 'nats';
+import { connect, nkeyAuthenticator, StringCodec, JSONCodec } from 'nats.ws';
+import type { NatsConnection, Subscription, PublishOptions, RequestOptions } from 'nats.ws';
 
 /**
  * NATS bağlantısını yöneten sınıf
@@ -41,6 +41,7 @@ export class NatsWrapper {
 	}
 
 	private async connect(): Promise<void> {
+		console.log('Client NATS bağlantısı kuruluyor...');
 		try {
 			if (!this.nc) {
 				const connectOptions: any = {

@@ -8,6 +8,7 @@
         "mariadb": "^3.4.0",
         "memjs": "^1.3.2",
         "nats": "^2.29.2",
+        "nats.ws": "^1.30.3",
       },
       "devDependencies": {
         "@types/bun": "^1.2.4",
@@ -75,6 +76,8 @@
     "ms": ["ms@2.1.3", "", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
 
     "nats": ["nats@2.29.3", "", { "dependencies": { "nkeys.js": "1.1.0" } }, "sha512-tOQCRCwC74DgBTk4pWZ9V45sk4d7peoE2njVprMRCBXrhJ5q5cYM7i6W+Uvw2qUrcfOSnuisrX7bEx3b3Wx4QA=="],
+
+    "nats.ws": ["nats.ws@1.30.3", "", { "optionalDependencies": { "nkeys.js": "1.1.0" } }, "sha512-aM77V2SEc+B6lbxCMZK3qfRy4jg8pmHj+wZzQKDiDIQYhLPj6U2NSHHBex0syj72Ayzl4uR5Lp3aKXTaVLbRpw=="],
 
     "nkeys.js": ["nkeys.js@1.1.0", "", { "dependencies": { "tweetnacl": "1.0.3" } }, "sha512-tB/a0shZL5UZWSwsoeyqfTszONTt4k2YS0tuQioMOD180+MbombYVgzDUYHlx+gejYK6rgf08n/2Df99WY0Sxg=="],
 

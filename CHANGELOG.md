@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.15] - 22 Eylül 2025
+
+### 🐛 Bug Fixes
+
+- nats.ws package is used for client side instead of nats
+
+---
+
 ## [0.2.14] - 22 Eylül 2025
 
 ### 🐛 Bug Fixes
