@@ -1,9 +1,16 @@
 import { type } from "arktype";
 
 // TODO: Will define schema type later
-export function formBuilder<T extends Record<string, any>>(data: T, _schema: any = null) {
+export function formBuilder<T extends Record<string, any>>(data?: T, schema?: any) {
+    let arkSchema = schema ? type(schema) : null;
+
+    // Eğer data verilmemişse veya boş obje ise ve schema varsa, default obje oluştur
+    if ((!data || Object.keys(data).length === 0) && schema) {
+        data = createObject<T>(schema);
+    }
+
+    data = data || {} as T;
     let initialData = { ...data };
-    let schema = type(_schema);
     return {
         data: { ...data },
         isLoading: false,
@@ -46,8 +53,8 @@ export function formBuilder<T extends Record<string, any>>(data: T, _schema: any
             Object.keys(this.err).forEach((key) => delete this.err[key]);
         },
         validate() {
-            if (!schema) return null
-            const result = schema(this.data);
+            if (!arkSchema) return null
+            const result = arkSchema(this.data);
             if (result instanceof type.errors) {
                 result.flatMap(error => {
                     this.err[error.path[0] as keyof T] = [error.message];
@@ -64,3 +71,19 @@ export function formBuilder<T extends Record<string, any>>(data: T, _schema: any
 }
 
 export default formBuilder;
+
+function createObject<T extends Record<string, any>>(schema: any) {
+    console.log("--schema--");
+    let empty = {} as T;
+    Object.keys(schema).forEach((key) => {
+        console.log(key, schema[key]);
+        empty[key as keyof T] = (schema[key].includes("string") ? "" :
+            schema[key].includes("number") ? 0 :
+                schema[key].includes("bigint") ? BigInt(0) :
+                    schema[key].includes("boolean") ? false :
+                        schema[key].includes("undefined") ? undefined :
+                            schema[key].includes("null") ? null :
+                                undefined) as T[keyof T];
+    });
+    return empty;
+}

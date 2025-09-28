@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.18] - 28 Eylül 2025
+
+### 🔄 Changed
+
+- if schema is prived and data is empty object {} or undefined formBuilder now returns default object with keys in schema and values according to schema
+
+---
+
 ## [0.2.17] - 28 Eylül 2025
 
 ### 🐛 Bug Fixes
