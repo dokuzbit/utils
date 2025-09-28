@@ -15,10 +15,11 @@
  */
 
 
-import { Database } from "bun:sqlite";
-const cacheDB = new Database(process.env.NODE_ENV === 'production' ? "/www/sqlite/cache.db" : "cache.db");
+// import { Database } from "bun:sqlite";
+let cacheDB: any | null = null;
+// const cacheDB = new Database(process.env.NODE_ENV === 'production' ? "/www/sqlite/cache.db" : "cache.db");
 // cacheDB.exec("pragma journal_mode = WAL;");
-cacheDB.exec("CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT, expireDate TEXT);");
+// cacheDB.exec("CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT, expireDate TEXT);");
 
 interface CacheItem<T> {
     value: T;
@@ -138,7 +139,7 @@ export class Cache<T> {
         this.removeExpired();
 
         const node = this.cache.get(key);
-        if (!node) {
+        if (!node && cacheDB) {
             const dbNode: any = cacheDB.prepare("SELECT value, expireDate FROM cache WHERE key = ? AND datetime(expireDate) > datetime('now')").get(key);
             if (dbNode) {
                 console.log("found on db")
@@ -157,10 +158,12 @@ export class Cache<T> {
         } else {
 
             // Düğümü başa taşı
-            this.removeNode(node);
-            this.addNodeToHead(node);
+            if (node) {
+                this.removeNode(node);
+                this.addNodeToHead(node);
+            }
 
-            return node.value.value;
+            return node?.value.value ?? null;
         }
 
         return null;
@@ -172,7 +175,7 @@ export class Cache<T> {
         const node = this.cache.get(key);
         // Eğer expireDate varsa veritabanından sil.
         if (node?.value.expireDate) {
-            cacheDB.prepare("DELETE FROM cache WHERE key = ?").run(key);
+            if (cacheDB) cacheDB.prepare("DELETE FROM cache WHERE key = ?").run(key);
         }
 
         if (this.cache.has(key)) {
@@ -197,7 +200,7 @@ export class Cache<T> {
         for (const [key, node] of this.cache.entries()) {
             if (node.value.expiryTime <= now) {
                 if (node.value.expireDate) {
-                    cacheDB.prepare("INSERT INTO cache (key, value, expireDate) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = ?, expireDate = ?").run(key, JSON.stringify(node.value.value), node.value.expireDate, JSON.stringify(node.value.value), node.value.expireDate);
+                    if (cacheDB) cacheDB.prepare("INSERT INTO cache (key, value, expireDate) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = ?, expireDate = ?").run(key, JSON.stringify(node.value.value), node.value.expireDate, JSON.stringify(node.value.value), node.value.expireDate);
                 }
                 this.currentSize -= node.value.size;
                 this.removeNode(node);
@@ -206,7 +209,7 @@ export class Cache<T> {
             }
         }
         // Veritamanında expireDate'i geçmiş verileri sil.
-        cacheDB.prepare("DELETE FROM cache WHERE datetime(expireDate) < datetime('now')").run();
+        if (cacheDB) cacheDB.prepare("DELETE FROM cache WHERE datetime(expireDate) < datetime('now')").run();
     }
 
     private removeUntilFreeSpace(): void {
@@ -265,4 +268,3 @@ export class Cache<T> {
 
 export const cache = new Cache<unknown>();
 export default cache;
-

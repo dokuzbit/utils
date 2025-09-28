@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.16] - 28 Eylül 2025
+
+### 🔄 Changed
+
+- added arkType validation to formBuilder @client/form.ts
+
+---
+
 ## [0.2.15] - 22 Eylül 2025
 
 ### 🐛 Bug Fixes
