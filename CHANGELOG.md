@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.17] - 28 Eylül 2025
+
+### 🐛 Bug Fixes
+
+- formBuildert validation is optional now, validate return null if schema is not provided
+- cache.server.ts now returns null if node is not found
+
+---
+
 ## [0.2.16] - 28 Eylül 2025
 
 ### 🔄 Changed

@@ -1,7 +1,7 @@
 import { type } from "arktype";
 
 // TODO: Will define schema type later
-export function formBuilder<T extends Record<string, any>>(data: T, _schema: any) {
+export function formBuilder<T extends Record<string, any>>(data: T, _schema: any = null) {
     let initialData = { ...data };
     let schema = type(_schema);
     return {
@@ -46,6 +46,7 @@ export function formBuilder<T extends Record<string, any>>(data: T, _schema: any
             Object.keys(this.err).forEach((key) => delete this.err[key]);
         },
         validate() {
+            if (!schema) return null
             const result = schema(this.data);
             if (result instanceof type.errors) {
                 result.flatMap(error => {
