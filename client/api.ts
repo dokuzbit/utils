@@ -83,12 +83,19 @@ export class Api {
 		if (payload && typeof payload === 'string') convertedPayload = payload;
 
 		// if payload exists, add it to the url as query params
-		if (convertedPayload) url = `${url}?${new URLSearchParams(convertedPayload).toString()}`;
-		// if (payload && typeof payload === 'string') url = `${url}&${payload}`;
+		if (convertedPayload) {
+			const queryString = new URLSearchParams(convertedPayload).toString();
+			if (queryString) url = `${url}?${queryString}`;
+		}
 
 		if (ttl > 0) {
 			const cached = await cache.get(url);
+			console.log('cached', url);
 			if (cached) return { data: cached, error: null, status: 200, ok: true };
+		} else {
+			// ttl is 0, so we also remove the cache
+			console.log('removing cache', url);
+			cache.remove(url);
 		}
 		const result = await this.request<T>(url, 'GET');
 		if (ttl > 0 && result.data) cache.set(url, result.data, ttl);

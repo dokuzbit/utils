@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.20] - October 4, 2025
+
+### ✨ Added
+
+- client/api now removes cache if ttl is 0
+
+---
+
 ## [0.2.19] - October 4, 2025
 
 ### ✨ Added
