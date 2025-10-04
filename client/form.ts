@@ -1,18 +1,14 @@
 import { type } from "arktype";
 
-// TODO: Will define schema type later
-export function formBuilder<T extends Record<string, any>>(data?: T, schema?: any) {
+export function formBuilder<T extends Record<string, any> = Record<string, any>>(data?: T, schema?: any) {
     let arkSchema = schema ? type(schema) : null;
 
     // Eğer data verilmemişse veya boş obje ise ve schema varsa, default obje oluştur
-    if ((!data || Object.keys(data).length === 0) && schema) {
-        data = createObject<T>(schema);
-    }
-
+    if ((!data || Object.keys(data).length === 0) && schema) data = createObject<T>(schema);
     data = data || {} as T;
     let initialData = { ...data };
     return {
-        data: { ...data },
+        data,
         isLoading: false,
         allowEmptySubmit: false,
         err: {} as Partial<Record<keyof T, string[]>>,
@@ -73,16 +69,14 @@ export function formBuilder<T extends Record<string, any>>(data?: T, schema?: an
 export default formBuilder;
 
 function createObject<T extends Record<string, any>>(schema: any) {
-    console.log("--schema--");
     let empty = {} as T;
     Object.keys(schema).forEach((key) => {
-        console.log(key, schema[key]);
         empty[key as keyof T] = (schema[key].includes("string") ? "" :
             schema[key].includes("number") ? 0 :
                 schema[key].includes("bigint") ? BigInt(0) :
                     schema[key].includes("boolean") ? false :
-                        schema[key].includes("undefined") ? undefined :
-                            schema[key].includes("null") ? null :
+                        schema[key].includes("null") ? null :
+                            schema[key].includes("undefined") ? undefined :
                                 undefined) as T[keyof T];
     });
     return empty;

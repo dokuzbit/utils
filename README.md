@@ -15,25 +15,73 @@ You can install the library using your favorite package manager, but yes we 💜
 bun install @dokuzbit/utils
 ```
 
+## Package Structure
+
+This package is organized into three main modules:
+
+- **`/common`** - Isomorphic utilities that work in both client and server environments
+- **`/client`** - Browser-only utilities
+- **`/server`** - Server-only utilities (Node.js)
+
+This separation ensures optimal bundle sizes and prevents server code from being included in client bundles.
+
 ## Usage Example
 
-We recommend using singleton pattern as documented below. However if you want to use multiton (aka multiple instances) you can import the class directly. Explained [here](https://github.com/dokuzbit/utils/blob/main/docs/common.md#multiton-pattern)
-
 ```ts
-import { api } from '@dokuzbit/utils/client';
-import { mariadb } from '@dokuzbit/utils/server';
+// Common utilities (works everywhere)
+import { tryCatch } from "@dokuzbit/utils/common";
+
+// Client-side utilities
+import { api } from "@dokuzbit/utils/client";
+
+// Server-side utilities
+import { mariadb } from "@dokuzbit/utils/server";
 ```
 
-## Default Import
+### Singleton Pattern
 
-We export the singleton instance as default, so you can import it as follows:
+We recommend using singleton pattern for server utilities as documented below. However if you want to use multiton (aka multiple instances) you can import the class directly. Explained [here](https://github.com/dokuzbit/utils/blob/main/docs/common.md#multiton-pattern)
 
 ```ts
-import data from '@dokuzbit/utils/client/api';
-import db from '@dokuzbit/utils/server/mariadb';
+import db from "@dokuzbit/utils/server/mariadb";
 ```
 
-## Common Information
+## Common Utilities Documentation
+
+Common utilities are isomorphic and can be used in both client and server environments.
+
+- [tryCatch](https://github.com/dokuzbit/utils/blob/main/docs/common/tryCatch.md) - safe function execution with error handling
+
+### tryCatch
+
+Safe function execution with automatic error handling. Supports both synchronous and asynchronous functions.
+
+```ts
+import { tryCatch, type Result } from "@dokuzbit/utils/common";
+
+// Synchronous usage
+const result = tryCatch(() => JSON.parse(jsonString));
+if (result.error) {
+  console.error("Parse failed:", result.error);
+} else {
+  console.log("Data:", result.data);
+}
+
+// Asynchronous usage
+const asyncResult = await tryCatch(async () => {
+  const response = await fetch("/api/data");
+  return response.json();
+});
+if (asyncResult.error) {
+  console.error("Fetch failed:", asyncResult.error);
+} else {
+  console.log("Data:", asyncResult.data);
+}
+```
+
+**Returns:** `Result<T>` object with `{ data: T, error: Error | null }`
+
+---
 
 Please read this [Common Information](https://github.com/dokuzbit/utils/blob/main/docs/common.md) about the library documenting how to install, how to import, how to use singleton and multiton patterns.
 
@@ -55,9 +103,63 @@ Please read this [Common Information](https://github.com/dokuzbit/utils/blob/mai
 
 ---
 
-### Why two folders for client and server and why server utilites named with .server.ts?
+### Why three separate modules (common, client, server)?
 
-In sveltekit (we 💜 svelte) you cannot import server side utilities in client side ending up with error to protect missuse of server side utilities in client side which protects data leaks. So we put server side utilities in `server` folder with `.server.ts` extension and client side utilities in `client` folder.
+This structure provides several benefits:
+
+1. **Bundle Size Optimization**: Only import what you need. Client bundles don't include server code.
+2. **Security**: Server-side code (database credentials, API keys) never leaks to the client bundle.
+3. **Framework Support**: In SvelteKit (we 💜 Svelte), you cannot import server utilities in client-side code, preventing accidental data leaks.
+4. **Tree-shaking**: Modern bundlers can eliminate unused code more effectively.
+5. **Clear Intent**: Code organization makes it obvious where utilities can be used.
+
+The `.server.ts` extension in file names further helps SvelteKit identify server-only modules.
+
+---
+
+## 🤖 AI Assistant Integration
+
+This library includes special context files optimized for AI assistants to provide better suggestions.
+
+### Quick Setup (Recommended)
+
+After installing the package, run:
+
+```bash
+npx dokuzbit-setup-ai
+```
+
+This will copy AI context files to your project root:
+
+- `.cursorrules` - Auto-detected by Cursor AI
+- `AI_CONTEXT.md` - For Claude, ChatGPT, and other AI assistants
+
+### Manual Setup
+
+#### For Cursor AI Users
+
+Cursor automatically detects `.cursorrules` in your project or node_modules. No action needed!
+
+#### For Claude / ChatGPT Users
+
+Copy the context file to your project:
+
+```bash
+cp node_modules/@dokuzbit/utils/AI_CONTEXT.md .
+```
+
+Then share it with your AI assistant:
+
+```
+"Read the AI_CONTEXT.md file and help me use @dokuzbit/utils"
+```
+
+#### View Online
+
+You can also view these files on [GitHub](https://github.com/dokuzbit/utils):
+
+- [AI_CONTEXT.md](https://github.com/dokuzbit/utils/blob/main/AI_CONTEXT.md)
+- [.cursorrules](https://github.com/dokuzbit/utils/blob/main/.cursorrules)
 
 ---
 

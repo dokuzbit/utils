@@ -11,7 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.18] - 28 Eylül 2025
+## [0.2.19] - October 4, 2025
+
+### ✨ Added
+
+- Added `tryCatch` utility function in `common` module for safe function execution with error handling
+- Added support for both synchronous and asynchronous functions in `tryCatch`
+- Added `common` exports to package.json for isomorphic utilities
+
+### 🔄 Changed
+
+- Improved package.json exports structure with proper type definitions
+- Removed default exports in favor of named exports for better tree-shaking
+- Enhanced TypeScript types with `Result<T>` and `AsyncResult<T>` for better type safety
+
+### 📚 Documentation
+
+- Updated README with common utilities section
+- Added comprehensive JSDoc comments with usage examples
+
+---
+
+## [0.2.18] - September 28, 2025
 
 ### 🔄 Changed
 
@@ -19,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.17] - 28 Eylül 2025
+## [0.2.17] - September 28, 2025
 
 ### 🐛 Bug Fixes
 
@@ -28,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.16] - 28 Eylül 2025
+## [0.2.16] - September 28, 2025
 
 ### 🔄 Changed
 
@@ -36,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.15] - 22 Eylül 2025
+## [0.2.15] - September 22, 2025
 
 ### 🐛 Bug Fixes
 
@@ -44,7 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.14] - 22 Eylül 2025
+## [0.2.14] - September 22, 2025
 
 ### 🐛 Bug Fixes
 
@@ -52,7 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.13] - 22 Eylül 2025
+## [0.2.13] - September 22, 2025
 
 ### 🔄 Changed
 
@@ -65,7 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.12] - 17 Temmuz 2025
+## [0.2.12] - July 17, 2025
 
 ### 🔄 Changed
 
@@ -73,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.11] - 3 Temmuz 2025
+## [0.2.11] - July 3, 2025
 
 ### 🔄 Changed
 
@@ -85,7 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.10] - 3 Temmuz 2025
+## [0.2.10] - July 3, 2025
 
 ### 🔄 Changed
 

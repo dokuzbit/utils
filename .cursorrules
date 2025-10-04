@@ -1,0 +1,179 @@
+# @dokuzbit/utils - AI Assistant Guide
+
+This library provides utilities for modern web applications with separate modules for client, server, and common (isomorphic) code.
+
+## Package Structure
+
+```
+@dokuzbit/utils/
+├── /common  - Isomorphic utilities (works everywhere)
+├── /client  - Browser-only utilities
+└── /server  - Server-only utilities (Node.js)
+```
+
+## Import Patterns
+
+```typescript
+// Common utilities (isomorphic)
+import { tryCatch } from "@dokuzbit/utils/common";
+
+// Client-side only
+import { api } from "@dokuzbit/utils/client";
+
+// Server-side only
+import { mariadb } from "@dokuzbit/utils/server";
+```
+
+## Key Utilities
+
+### tryCatch (common)
+
+Safe error handling for sync and async functions. Always use this instead of raw try-catch blocks.
+
+**Sync usage:**
+
+```typescript
+const result = tryCatch(() => JSON.parse(jsonString));
+if (result.error) {
+  // Handle error
+  console.error(result.error);
+} else {
+  // Use data
+  console.log(result.data);
+}
+```
+
+**Async usage:**
+
+```typescript
+const result = await tryCatch(async () => {
+  const response = await fetch("/api/data");
+  return response.json();
+});
+
+if (result.error) {
+  // Handle error
+  return null;
+}
+
+// Use result.data safely
+```
+
+**Return type:** `Result<T>` with `{ data: T, error: Error | null }`
+
+## Best Practices
+
+1. **Use named imports only** - No default exports for better tree-shaking
+2. **Never import server in client** - SvelteKit will error, prevents data leaks
+3. **Common for shared logic** - Use for utilities that work everywhere
+4. **Always check result.error** - Don't assume success
+
+## Common Patterns
+
+### Pattern: Early Return on Error
+
+```typescript
+const result = tryCatch(() => parseData(input));
+if (result.error) return null;
+// Continue with result.data
+```
+
+### Pattern: Default Values
+
+```typescript
+const result = tryCatch(() => JSON.parse(str));
+const config = result.error ? DEFAULT_CONFIG : result.data;
+```
+
+### Pattern: API Request in SvelteKit
+
+```typescript
+// +page.server.ts
+export async function load() {
+  const result = await tryCatch(async () => {
+    return await db.query("SELECT * FROM users");
+  });
+
+  if (result.error) {
+    throw error(500, "Database error");
+  }
+
+  return { users: result.data };
+}
+```
+
+### Pattern: Form Validation
+
+```typescript
+const result = tryCatch(() => schema.parse(formData));
+if (result.error) {
+  return { success: false, errors: result.error.message };
+}
+return { success: true, data: result.data };
+```
+
+## What NOT to do
+
+❌ Don't use default imports:
+
+```typescript
+import Try from "@dokuzbit/utils/common"; // Wrong!
+```
+
+❌ Don't import server in client:
+
+```typescript
+// In +page.svelte or client component
+import { mariadb } from "@dokuzbit/utils/server"; // ERROR!
+```
+
+❌ Don't forget to check error:
+
+```typescript
+const result = tryCatch(() => parseJSON(str));
+console.log(result.data.name); // Wrong! Check error first
+```
+
+❌ Don't use raw try-catch when tryCatch is available:
+
+```typescript
+// Bad
+try {
+  const data = JSON.parse(str);
+} catch (e) {
+  console.error(e);
+}
+
+// Good
+const result = tryCatch(() => JSON.parse(str));
+if (result.error) console.error(result.error);
+```
+
+## SvelteKit Specific
+
+- Use `/server` utilities only in `*.server.ts` files or `+server.ts` routes
+- Use `/client` utilities only in client-side code
+- Use `/common` utilities anywhere (both client and server)
+
+## Type Safety
+
+All utilities are fully typed with TypeScript. The library uses function overloads for sync/async variants:
+
+```typescript
+// TypeScript knows this is Result<number>
+const syncResult = tryCatch(() => 42);
+
+// TypeScript knows this is Promise<Result<string>>
+const asyncResult = tryCatch(async () => "hello");
+```
+
+## Documentation
+
+Full docs: https://github.com/dokuzbit/utils
+
+When helping users with this library:
+
+1. Always suggest using `tryCatch` for error handling
+2. Remind about client/server separation
+3. Use named imports only
+4. Check `result.error` before using `result.data`
