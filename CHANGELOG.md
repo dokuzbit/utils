@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.21] - October 6, 2025
+
+### 🔄 Changed
+
+- /server/session now returns PayloadInterface instead of boolean and callback now returns PayloadInterface or boolean
+  this means you can pass true or false or function as callback and this function can return PayloadInterface or boolean
+
+---
+
 ## [0.2.20] - October 4, 2025
 
 ### ✨ Added

@@ -94,7 +94,7 @@ export class Session {
 	 * @param [callback] - The callback function to be called if the token is expired which returns true if the token should be refreshed
 	 * @returns A promise that resolves to an object containing the payload, expired status, and error.
 	 */
-	async getToken(cookieName?: string, callback?: ((payload: any) => Promise<boolean>) | boolean, nocache = false): Promise<PayloadInterface> {
+	async getToken(cookieName?: string, callback?: ((payload: any) => Promise<PayloadInterface | boolean>) | boolean, nocache = false): Promise<PayloadInterface> {
 		// Check if the token is cached, return the cached payload
 		// const cachedPayload = cache.get(cookieName || this.sm.cookieName)
 		// if (cachedPayload && !nocache) return this.returnPayload(cachedPayload, false, null);
@@ -109,23 +109,33 @@ export class Session {
 		} catch (error) {
 			cache.remove(cookieName || this.sm.cookieName);
 			if (error instanceof jwt.TokenExpiredError) {
-				let payload = jwt.decode(cookie) as JwtPayload;
+				let payload = jwt.decode(cookie) as PayloadInterface;
 				if (callback) {
 					try {
 						if (typeof callback === 'function') {
-							if (await callback(payload)) {
-								await this.setToken(payload);
-								return this.returnPayload(payload, false, null);
-							}
+							let newPayload = await callback(payload);
+							// if newPayload is false null or undefined return expired true
+							if (!newPayload) return this.returnPayload(payload, true, null);
+
+							// if newPayload is true set it to the original payload
+							if (newPayload === true) newPayload = payload;
+
+							// set the token to the new payload and return the new payload
+							await this.setToken(newPayload);
+							return this.returnPayload(newPayload, false, null);
 						} else {
-							if (callback) {
+							if (callback === true) {
+								// if callback is true always refresh the token
 								await this.setToken(payload);
 								return this.returnPayload(payload, false, null);
 							}
+							// if callback is not a function and not true return expired true
+							return this.returnPayload(payload, true, null);
 						}
 					} catch (error) {
 					}
 				}
+				// if callback is not set return expired true
 				return this.returnPayload(payload, true, null);
 			}
 			return this.returnPayload(null, false, error instanceof Error ? error.message : 'Unknown error');
