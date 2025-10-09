@@ -744,106 +744,70 @@ export class MariaDB {
 
 
 
-	async getJsonValue(table: string, where: string, jsonField: string, path?: string, returnError?: false): Promise<any>;
-	async getJsonValue(table: string, where: string, jsonField: string, path: string | undefined, returnError: true): Promise<Result<any>>;
-	async getJsonValue(table: string, where: string, jsonField: string, path: string = '*', returnError?: boolean): Promise<any | Result<any>> {
-		const shouldReturnError = returnError ?? this.returnError;
+	async getJsonValue(table: string, where: string, jsonField: string, path?: string): Promise<any> {
 
 		try {
 			const sql = `SELECT JSON_VALUE(${jsonField}, ?) as value FROM ${table} WHERE ${where} LIMIT 1`;
-			const result = await this.query(sql, [`$.${path}`], shouldReturnError as any);
+			const result = await this.query(sql, [`$.${path}`]);
 
 			// Check if result has error
 			if (result && typeof result === 'object' && 'error' in result) {
-				if (shouldReturnError) {
-					return { data: null, error: new Error(String(result.error)) } as Result<any>;
-				}
 				return result;
 			}
 
-			return shouldReturnError ? { data: result, error: null } as Result<any> : result;
+			return result;
 		} catch (err: any) {
 			console.error('getJsonValue error:', err);
-			if (shouldReturnError) {
-				return { data: null, error: new Error(err.message || 'getJsonValue failed') } as Result<any>;
-			}
 			return { error: err.message || 'getJsonValue failed' };
 		}
 	}
 
-	async getJsonExtract(table: string, where: string, jsonField: string, path?: string, returnError?: false): Promise<any>;
-	async getJsonExtract(table: string, where: string, jsonField: string, path: string | undefined, returnError: true): Promise<Result<any>>;
-	async getJsonExtract(table: string, where: string, jsonField: string, path: string = '', returnError?: boolean): Promise<any | Result<any>> {
-		const shouldReturnError = returnError ?? this.returnError;
+	async getJsonExtract(table: string, where: string, jsonField: string, path?: string): Promise<any> {
 
 		try {
 			const sql = `SELECT JSON_EXTRACT(${jsonField}, ?) as value FROM ${table} WHERE ${where} LIMIT 1`;
-			const result = await this.query<{ value: any }>(sql, [path ? `$.${path}` : '$'], shouldReturnError as any);
+			const result = await this.query<{ value: any }>(sql, [path ? `$.${path}` : '$']);
 
 			// Check if result has error
 			if (result && typeof result === 'object' && 'error' in result) {
-				if (shouldReturnError) {
-					return { data: null, error: new Error(String(result.error)) } as Result<any>;
-				}
 				return result;
 			}
 
 			const finalResult = Array.isArray(result) ? result[0]?.value : result;
-			return shouldReturnError ? { data: finalResult, error: null } as Result<any> : finalResult;
+			return finalResult;
 		} catch (err: any) {
 			console.error('getJsonExtract error:', err);
-			if (shouldReturnError) {
-				return { data: null, error: new Error(err.message || 'getJsonExtract failed') } as Result<any>;
-			}
 			return { error: err.message || 'getJsonExtract failed' };
 		}
 	}
 
-	async setJsonValue(table: string, where: string, jsonField: string, path: string, value: any, returnError?: false): Promise<any>;
-	async setJsonValue(table: string, where: string, jsonField: string, path: string, value: any, returnError: true): Promise<Result<any>>;
-	async setJsonValue(table: string, where: string, jsonField: string, path: string, value: any, returnError?: boolean): Promise<any | Result<any>> {
-		const shouldReturnError = returnError ?? this.returnError;
+	async setJsonValue(table: string, where: string, jsonField: string, path: string, value: any): Promise<any> {
 
 		if (!where) {
 			const errorResult = { error: 'where is required' };
-			if (shouldReturnError) {
-				return { data: null, error: new Error('where is required') } as Result<any>;
-			}
 			return errorResult;
 		}
 
 		try {
 			const sql = `UPDATE ${table} SET ${jsonField} = JSON_SET(${jsonField}, ?, ?) WHERE ${where}`;
-			const result = await this.query(sql, [`$.${path}`, value], shouldReturnError as any);
+			const result = await this.query(sql, [`$.${path}`, value]);
 
 			// Check if result has error
 			if (result && typeof result === 'object' && 'error' in result) {
-				if (shouldReturnError) {
-					return { data: null, error: new Error(String(result.error)) } as Result<any>;
-				}
 				return result;
 			}
 
-			return shouldReturnError ? { data: result, error: null } as Result<any> : result;
+			return result;
 		} catch (err: any) {
 			console.error('setJsonValue error:', err);
-			if (shouldReturnError) {
-				return { data: null, error: new Error(err.message || 'setJsonValue failed') } as Result<any>;
-			}
 			return { error: err.message || 'setJsonValue failed' };
 		}
 	}
 
-	async setJsonObject(table: string, where: string, jsonField: string, path: string, value: Record<string, any>, returnError?: false): Promise<any>;
-	async setJsonObject(table: string, where: string, jsonField: string, path: string, value: Record<string, any>, returnError: true): Promise<Result<any>>;
-	async setJsonObject(table: string, where: string, jsonField: string, path: string, value: Record<string, any>, returnError?: boolean): Promise<any | Result<any>> {
-		const shouldReturnError = returnError ?? this.returnError;
+	async setJsonObject(table: string, where: string, jsonField: string, path: string, value: Record<string, any>): Promise<any> {
 
 		if (!where) {
 			const errorResult = { error: 'where is required' };
-			if (shouldReturnError) {
-				return { data: null, error: new Error('where is required') } as Result<any>;
-			}
 			return errorResult;
 		}
 
@@ -852,166 +816,103 @@ export class MariaDB {
 			if (Array.isArray(value)) {
 				flattenedValues = value.flat();
 				const sql = `UPDATE ${table} SET ${jsonField} = JSON_SET(${jsonField}, ?, JSON_ARRAY(${flattenedValues})) WHERE ${where}`;
-				const result = await this.query(sql, [`$.${path}`, ...flattenedValues], shouldReturnError as any);
+				const result = await this.query(sql, [`$.${path}`, ...flattenedValues]);
 
 				// Check if result has error
 				if (result && typeof result === 'object' && 'error' in result) {
-					if (shouldReturnError) {
-						return { data: null, error: new Error(String(result.error)) } as Result<any>;
-					}
 					return result;
 				}
 
-				return shouldReturnError ? { data: result, error: null } as Result<any> : result;
+				return result;
 			} else {
 				flattenedValues = Object.entries(value).flat();
 				const sql = `UPDATE ${table} SET ${jsonField} = JSON_SET(${jsonField}, ?, JSON_OBJECT(${Array(flattenedValues.length / 2)
 					.fill('?,?')
 					.join(',')})) WHERE ${where}`;
-				const result = await this.query(sql, [`$.${path}`, ...flattenedValues], shouldReturnError as any);
+				const result = await this.query(sql, [`$.${path}`, ...flattenedValues]);
 
 				// Check if result has error
 				if (result && typeof result === 'object' && 'error' in result) {
-					if (shouldReturnError) {
-						return { data: null, error: new Error(String(result.error)) } as Result<any>;
-					}
 					return result;
 				}
 
-				return shouldReturnError ? { data: result, error: null } as Result<any> : result;
+				return result;
 			}
 		} catch (err: any) {
 			console.error('setJsonObject error:', err);
-			if (shouldReturnError) {
-				return { data: null, error: new Error(err.message || 'setJsonObject failed') } as Result<any>;
-			}
 			return { error: err.message || 'setJsonObject failed' };
 		}
 	}
 
-	async findJsonValue(table: string, where: string, jsonField: string, path: string, value: any, returnError?: false): Promise<any>;
-	async findJsonValue(table: string, where: string, jsonField: string, path: string, value: any, returnError: true): Promise<Result<any>>;
-	async findJsonValue(table: string, where: string, jsonField: string, path: string, value: any, returnError?: boolean): Promise<any | Result<any>> {
-		const shouldReturnError = returnError ?? this.returnError;
+	async findJsonValue(table: string, where: string, jsonField: string, path: string, value: any): Promise<any> {
 
 		try {
 			if (!where) where = '1=1';
 			const sql = `SELECT * FROM ${table} WHERE ${where} AND JSON_VALUE(${jsonField}, ?) = ?`;
-			const result = await this.query(sql, [`$.${path}`, value], shouldReturnError as any);
+			const result = await this.query(sql, [`$.${path}`, value]);
 
 			// Check if result has error
 			if (result && typeof result === 'object' && 'error' in result) {
-				if (shouldReturnError) {
-					return { data: null, error: new Error(String(result.error)) } as Result<any>;
-				}
 				return result;
 			}
 
-			return shouldReturnError ? { data: result, error: null } as Result<any> : result;
+			return result;
 		} catch (err: any) {
 			console.error('findJsonValue error:', err);
-			if (shouldReturnError) {
-				return { data: null, error: new Error(err.message || 'findJsonValue failed') } as Result<any>;
-			}
 			return { error: err.message || 'findJsonValue failed' };
 		}
 	}
 
-	async beginTransaction(returnError?: false): Promise<void | { error: string }>;
-	async beginTransaction(returnError: true): Promise<Result<void>>;
-	async beginTransaction(returnError?: boolean): Promise<void | { error: string } | Result<void>> {
-		const shouldReturnError = returnError ?? this.returnError;
+	async beginTransaction(): Promise<void | { error: string }> {
 
 		if (!this.pool) {
-			if (shouldReturnError) {
-				return { data: undefined as void, error: new Error('Pool is not initialized') } as Result<void>;
-			}
 			return { error: 'Pool is not initialized' };
 		}
 
 		try {
 			await this.pool.query('BEGIN');
-			if (shouldReturnError) {
-				return { data: undefined as void, error: null } as Result<void>;
-			}
 		} catch (error: SqlError | any) {
 			console.error('beginTransaction error:', error.sqlMessage);
-			if (shouldReturnError) {
-				return { data: undefined as void, error: new Error(error.sqlMessage) } as Result<void>;
-			}
 			return { error: error.sqlMessage };
 		}
 	}
 
-	async commit(returnError?: false): Promise<void | { error: string }>;
-	async commit(returnError: true): Promise<Result<void>>;
-	async commit(returnError?: boolean): Promise<void | { error: string } | Result<void>> {
-		const shouldReturnError = returnError ?? this.returnError;
+	async commit(): Promise<void | { error: string }> {
 
 		if (!this.pool) {
-			if (shouldReturnError) {
-				return { data: undefined as void, error: new Error('Pool is not initialized') } as Result<void>;
-			}
 			return { error: 'Pool is not initialized' };
 		}
 
 		try {
 			await this.pool.query('COMMIT');
-			if (shouldReturnError) {
-				return { data: undefined as void, error: null } as Result<void>;
-			}
 		} catch (error: SqlError | any) {
 			console.error('commit error:', error.sqlMessage);
-			if (shouldReturnError) {
-				return { data: undefined as void, error: new Error(error.sqlMessage) } as Result<void>;
-			}
 			return { error: error.sqlMessage };
 		}
 	}
 
-	async rollback(returnError?: false): Promise<void | { error: string }>;
-	async rollback(returnError: true): Promise<Result<void>>;
-	async rollback(returnError?: boolean): Promise<void | { error: string } | Result<void>> {
-		const shouldReturnError = returnError ?? this.returnError;
+	async rollback(): Promise<void | { error: string }> {
 
 		if (!this.pool) {
-			if (shouldReturnError) {
-				return { data: undefined as void, error: new Error('Pool is not initialized') } as Result<void>;
-			}
 			return { error: 'Pool is not initialized' };
 		}
 
 		try {
 			await this.pool.query('ROLLBACK');
-			if (shouldReturnError) {
-				return { data: undefined as void, error: null } as Result<void>;
-			}
 		} catch (error: SqlError | any) {
 			console.error('rollback error:', error.sqlMessage);
-			if (shouldReturnError) {
-				return { data: undefined as void, error: new Error(error.sqlMessage) } as Result<void>;
-			}
 			return { error: error.sqlMessage };
 		}
 	}
 
 
 
-	async close(returnError?: false): Promise<void | { error: string }>;
-	async close(returnError: true): Promise<Result<void>>;
-	async close(returnError?: boolean): Promise<void | { error: string } | Result<void>> {
-		const shouldReturnError = returnError ?? this.returnError;
+	async close(): Promise<void | { error: string }> {
 
 		try {
 			if (this.pool) await this.pool.end();
-			if (shouldReturnError) {
-				return { data: undefined as void, error: null } as Result<void>;
-			}
 		} catch (error: SqlError | any) {
 			console.error('close error:', error.sqlMessage);
-			if (shouldReturnError) {
-				return { data: undefined as void, error: new Error(error.sqlMessage) } as Result<void>;
-			}
 			return { error: error.sqlMessage };
 		}
 	}
