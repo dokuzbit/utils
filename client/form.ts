@@ -1,3 +1,11 @@
+/**
+ * @description formBuilder
+ * @lastModified 09.10.2025
+ * 
+ * // TODO: Type validation should accept any validation library
+ */
+
+
 import { type } from "arktype";
 
 export function formBuilder<T extends Record<string, any> = Record<string, any>>(data?: T, schema?: any) {

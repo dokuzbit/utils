@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.22] - October 10, 2025
+
+### 🔄 Changed
+
+- mariadb now support dot notation in query method ie: `select data.color from json_test where data.size = ?`
+- mariadb now return { affectedRows: 0, error: any } instead of null if error occurs
+- mariadb now return array when limit 1 is used but query has 'error' property to distunguish from real error object
+
 ## [0.2.21] - October 6, 2025
 
 ### 🔄 Changed

@@ -1,3 +1,32 @@
+/**
+* @class MariaDB
+* @description MariaDB/MySQL class for database operations
+* @lastModified 2025-10-09
+* 
+* @example
+* import { mariadb } from "@dokuzbit/utils/server";
+* mariadb.config({host: "localhost",user: "root",password: "password",database: "test"});
+* 
+* @method query - Simple select query
+* const result = await mariadb.query<User>("SELECT * FROM users where id = ?", [1]); // NOTE: You can use generics to type the result
+* const result = await mariadb.query("SELECT * FROM users where id = :id", { id: 1 });
+* const result = await mariadb.query({ sql: 'SELECT * FROM users WHERE id = :id limit 1', rowsAsArray: true }, { id: 1 }); // NOTE: Check QueryOptions type
+* 
+* // NOTE: limit 1 will return single object instead of array
+* const result = await mariadb.query("SELECT * FROM users where id = :id limit 1", { id: 1 }); // NOTE: Returns single object
+* 
+* // NOTE: limit 1 & selecting only one column will return single value instead of object
+* const result = await mariadb.query("SELECT name FROM users where id = :id limit 1", { id: 1 }); // NOTE: Returns single value
+* 
+* 
+* 
+* 
+* 
+* 
+* 
+* // TODO: Will implement stream support later (data in chunks)
+*/
+
 import { createPool, type Pool } from 'mariadb';
 import cache from './cache.server';
 
@@ -14,7 +43,7 @@ type QueryOptions = {
 	timeout?: number;
 }
 
-type SqlError = {
+export type SqlError = {
 	code: string;
 	errno: number;
 	fatal: boolean;
@@ -23,18 +52,22 @@ type SqlError = {
 	sqlMessage?: string;
 }
 
-type UpsertResult = {
-	affectedRows: number;
-	insertId: number | bigint;
-	warningStatus: number;
-} | { error: string } | null;
 
 type joinType = 'LEFT' | 'RIGHT' | 'INNER'
 	| 'OUTER' | 'CROSS';
 type Where = string | string[] | Record<string, any> | Record<string, any>[];
 type WhereParams = any | any[];
-type QueryResult<T> = T | null;
-interface DBConfig {
+
+export type QueryResult<T> = T | { error: Error | SqlError | string | any };
+
+export type UpsertResult = {
+	affectedRows: number;
+	insertId?: number | bigint;
+	warningStatus?: number;
+	error?: Error | SqlError | string | any;
+}
+
+type DBConfig = {
 	host?: string;
 	user?: string;
 	password?: string;
@@ -51,8 +84,9 @@ interface DBConfig {
 	dateStrings?: boolean;
 	collation?: string;
 	charset?: string;
+	returnError?: boolean;
 }
-interface QueryParams {
+type QueryParams = {
 	command?: 'findFirst' | 'findMany' | 'findAll';
 	select?: string | string[];
 	from: string | string[];
@@ -70,7 +104,7 @@ interface QueryParams {
 	asArray?: boolean;
 }
 
-interface UpdateParams {
+type UpdateParams = {
 	table: string;
 	values: Record<string, any>[] | Record<string, any>;
 	where: Where;
@@ -101,6 +135,7 @@ export class MariaDB {
 	private pool: Pool | undefined;
 	private dbConfig: DBConfig = {};
 	private cache: typeof cache = cache;
+	private returnError: boolean = false;
 	constructor(dbConfig?: DBConfig) {
 		if (dbConfig) this.config(dbConfig);
 	}
@@ -114,12 +149,16 @@ export class MariaDB {
 	 * @param dbConfig.database - Database name
 	 * @param dbConfig.connectionLimit - Database connection limit
 	 * @param dbConfig.trace - Database trace
+	 * @param dbConfig.returnError - Return errors in { data, error } format
 	 * 
 	 */
 	config(dbConfig: DBConfig) {
 		this.dbConfig = mergeDeep(this.dbConfig, dbConfig);
 		this.dbConfig.trace = dbConfig.trace || process.env.NODE_ENV === 'development';
 		this.dbConfig.connectionLimit = dbConfig.connectionLimit || 5;
+		if (dbConfig.returnError !== undefined) {
+			this.returnError = dbConfig.returnError;
+		}
 		if (!this.dbConfig || !this.dbConfig.host || !this.dbConfig.database || !this.dbConfig.user || !this.dbConfig.password) throw new Error('database, user and password are required');
 		if (!this.pool) this.pool = createPool(this.dbConfig);
 	}
@@ -133,7 +172,7 @@ export class MariaDB {
 	 * 
 	 * @param {string | QueryOptions} sql - SQL query
 	 * @param {any[] | Record<string, any>} values - Query values
-	 * @param {Record<string, any>[]} params - Query parameters
+	 * @param {boolean} returnError - Return errors in { data, error } format
 	 * @returns {Promise<T[] || T>} - Query result
 	 * 
 	 * @example simple with positional placeholders
@@ -145,39 +184,65 @@ export class MariaDB {
 	 * @example object usuage with named placeholders and limit 1
 	 * const result = await db.query({ sql: 'SELECT * FROM users WHERE id = :id limit 1', namedPlaceholders: true }, { id: 1 });
 	 * @returns {Promise<T>} - Single object NOT array
+	 * 
+	 * @example with error handling
+	 * const result = await db.query<User[]>('SELECT * FROM users WHERE id = ?', [1]);
+	 * if ('error' in result) {
+	 *   console.error(result.error);
+	 * } else {
+	 *   console.log(result); // TypeScript knows this is User[]
+	 * }
 	 */
-	public async query<T>(sql: string | QueryOptions, values?: any[] | Record<string, any>, params: Record<string, any>[] = []): Promise<T | null> {
+	public async query<T>(sql: string | QueryOptions, values?: any[] | Record<string, any>): Promise<QueryResult<T>> {
+
 		if (!this.pool && this.dbConfig !== undefined) this.pool = createPool(this.dbConfig);
 		if (!this.pool) this.pool = createPool(this.dbConfig);
-		// Önce string sql ile object sql yapalım, böylece sonra çift kontrole gerek kalmayacak
-		// if (typeof sql === 'string') sql = { sql: sql, ...params };
+
+		// Önce string sql ile object sql yapalım
 		if (typeof sql === 'string') {
-			const options = params[0] || {};
-			sql = { sql: sql, ...options };
+			// if fields have . notation convert it to JSON_VALUE like this: JSON_VALUE(jsonField, '$.path')
+			// Match patterns like: data.color or data.color.variant
+			// Replace with: JSON_VALUE(data, '$.color') or JSON_VALUE(data, '$.color.variant')
+			sql = sql.replace(
+				/\b(\w+)\.(\w+(?:\.\w+)*)\b/g,
+				(match, field, path) => {
+					// Don't replace if it's in quotes or part of table.column syntax
+					return `JSON_VALUE(${field}, '$.${path}')`;
+				}
+			);
+
+			sql = { sql: sql };
 		}
 
 		// Eğer values bir obje ise ve sql bir select ise namedPlaceholders'ı true yapalım
 		if (sql.sql.toLowerCase().startsWith('select') && values?.constructor === Object) sql = { ...sql, namedPlaceholders: true };
-		let result
+
+		let result;
 
 		// Run sql query with try catch
 		try {
 			result = await this.pool.query(sql, values);
 		} catch (error: SqlError | any) {
-			console.log(error.sqlMessage);
-			return null as QueryResult<T>;
+			return { error };
 		}
+
 		// Eğer result bir dizi ve tek bir eleman ise ve sql'de limit 1 varsa, o elemanı döndürelim
 		if (Array.isArray(result) && result.length === 1 && (/\blimit\s+1\b/i.test(sql.sql))) {
 			// Eğer result[0] ın tek bir key varsa, direkt value'yu döndür
-			if (Object.keys(result[0]).length === 1) return result[0][Object.keys(result[0])[0]] as T;
+			if (Object.keys(result[0]).length === 1) {
+				const data = result[0][Object.keys(result[0])[0]] as T;
+				return data;
+			}
+			// Eğer 'error' field'ı varsa, array olarak döndür (gerçek hatalarla karışmaması için)
+			if (result[0] && 'error' in result[0]) return result as T;
+
 			return result[0] as T;
 		}
+
 		if (Array.isArray(result) && result.length === 0 && (/\blimit\s+1\b/i.test(sql.sql))) {
 			return null as T;
 		}
-		// if (sql.sql.toLowerCase().includes('limit 1 ') || sql.sql.toLowerCase().endsWith('limit 1')) return result[0]
-		// if (result.meta) result.meta = this.getColumnDefs(result.meta);
+
 		return result as T;
 	}
 
@@ -198,7 +263,6 @@ export class MariaDB {
 	 * const result = await db.objectUpdate({ table: 'users', values: [{ id: 1, name: 'John' }, { id: 2, name: 'Jane' }], whereField: 'id' });
 	 * 
 	 */
-
 	async objectUpdate(options: { table: string; values: Record<string, any>[] | Record<string, any>; whereField?: string }): Promise<UpsertResult> {
 		let { table, values, whereField = 'id' } = options;
 		if (!Array.isArray(values)) values = [values] as Record<string, any>[];
@@ -229,18 +293,28 @@ export class MariaDB {
 			});
 
 			// Use own batch method
-			const result = await this.batch(query, batchParams);
+			const batchResult = await this.batch(query, batchParams);
 
 			// Check if result has error
-			if (result && typeof result === 'object' && 'error' in result) {
-				return result;
+			if (batchResult && typeof batchResult === 'object' && 'error' in batchResult) {
+				return batchResult;
 			}
 
-			return result;
+			// Array ise, toplam sonucu hesapla
+			if (Array.isArray(batchResult)) {
+				const totalAffectedRows = batchResult.reduce((sum: number, r: any) => sum + (r.affectedRows || 0), 0);
+				return {
+					affectedRows: totalAffectedRows,
+					insertId: batchResult[0]?.insertId || 0,
+					warningStatus: batchResult[0]?.warningStatus || 0
+				};
+			}
 
-		} catch (err: any) {
+			return batchResult;
+
+		} catch (err: SqlError | any) {
 			console.error('Batch update error:', err);
-			return { error: err.message || 'Batch update failed' };
+			return { affectedRows: 0, error: err };
 		}
 	}
 
@@ -250,6 +324,7 @@ export class MariaDB {
 	 * 
 	 * @param {string} table - Table name
 	 * @param {Record<string, any> | Record<string, any>[]} values - Records to insert [{field1: value1, field2: value2, ...}, {...}]
+	 * @param {boolean} returnError - Return errors in { data, error } format
 	 * @returns {Promise<UpsertResult>} - Operation result
 	 * 
 	 * @example single record
@@ -259,7 +334,6 @@ export class MariaDB {
 	 * const result = await db.insert('users', [{ name: 'John', email: 'john@example.com' }, { name: 'Jane', email: 'jane@example.com' }]);
 	 * 
 	 */
-
 	async insert<T>(table: string, values: Record<string, any> | Record<string, any>[]): Promise<UpsertResult> {
 		// Type safety, convert values to Record<string, any>[]
 		const valuesArray: Record<string, any>[] = Array.isArray(values) ? values : [values];
@@ -289,8 +363,7 @@ export class MariaDB {
 
 			return result;
 		} catch (err: any) {
-			console.error('Insert error:', err);
-			return { error: err.message || 'Insert failed' };
+			return { affectedRows: 0, error: err };
 		}
 	}
 
@@ -301,6 +374,7 @@ export class MariaDB {
 	 * @param {string} table - Table name
 	 * @param {Record<string, any>} values - Record to insert
 	 * @param {Record<string, any>} update - Record to update
+	 * @param {boolean} returnError - Return errors in { data, error } format
 	 * @returns {Promise<any>} - Operation result
 	 * 
 	 * @example single record
@@ -310,7 +384,6 @@ export class MariaDB {
 	 * const result = await db.upsert('users', [{ name: 'John', email: 'john@example.com' }, { name: 'Jane', email: 'jane@example.com' }], { email: 'john@example.com' });
 	 * 
 	 */
-
 	public async upsert<T>(table: string, values: Record<string, any>, update: Record<string, any>): Promise<any> {
 		try {
 			const keys = Object.keys(values);
@@ -334,8 +407,7 @@ export class MariaDB {
 
 			return result;
 		} catch (err: any) {
-			console.error('Upsert error:', err);
-			return { error: err.message || 'Upsert failed' };
+			return { affectedRows: 0, error: err };
 		}
 	}
 
@@ -346,6 +418,7 @@ export class MariaDB {
 	 * @param {string} table - Table name
 	 * @param {string} where - Where clause
 	 * @param {any[]} params - Query parameters
+	 * @param {boolean} returnError - Return errors in { data, error } format
 	 * @returns {Promise<UpsertResult>} - Operation result
 	 * 
 	 * @example
@@ -354,8 +427,11 @@ export class MariaDB {
 	 * @example
 	 * const result = await db.delete('users', 'id = 1', [1, 2, 3]);
 	 */
-	async delete<T>(table: string, where: string, params: any[] = []): Promise<UpsertResult> {
-		if (!table || !where) return { error: 'table and where is required' };
+	async delete<T>(table: string, where: string, params?: any[]): Promise<UpsertResult> {
+
+		if (!table || !where) {
+			return { affectedRows: 0, error: 'table and where is required' } as UpsertResult;
+		}
 
 		try {
 			const sql = `DELETE FROM ${table} WHERE ${where}`;
@@ -368,44 +444,52 @@ export class MariaDB {
 
 			return result;
 		} catch (err: any) {
-			console.error('Delete error:', err);
-			return { error: err.message || 'Delete failed' };
+			return { affectedRows: 0, error: err };
 		}
 	}
 
 
 
 	async update(params: UpdateParams): Promise<UpsertResult> {
-		const { table, values, where, whereParams = [] } = params;
-		if (!table || !values || !where) return { error: 'table, values, where is required' };
+		const { table, values, where, whereParams } = params;
+
+		if (!table || !values || !where) {
+			return { affectedRows: 0, error: 'table, values, where is required' } as UpsertResult;
+		}
 
 		try {
-			// Güncellenecek değerler object veya object array olabilir
-			const valuesArray = Array.isArray(values) ? values : [values];
-			if (valuesArray.length === 0) return { error: 'values is empty' };
+			// values tek bir object olmalı (array değil)
+			if (Array.isArray(values)) {
+				return { affectedRows: 0, error: 'values must be an object, not an array' } as UpsertResult;
+			}
 
-			const setValues = valuesArray.map(obj => {
-				return Object.keys(obj).map(key => `${this.protectFieldName(key)} = ?`).join(', ');
-			});
+			if (!values || Object.keys(values).length === 0) {
+				return { affectedRows: 0, error: 'values is empty' } as UpsertResult;
+			}
+
+			// SET kısmını oluştur
+			const setClause = Object.keys(values)
+				.map(key => `${this.protectFieldName(key)} = ?`)
+				.join(', ');
 
 			const whereClause = this.buildWhere(where);
 			const whereParamsProcessed = this.buildWhereParams(where, whereParams);
 
 			// Update için SQL hazırla
-			let sql = `UPDATE ${table} SET ${setValues.join(', ')} WHERE ${whereClause}`;
-
-			const placeholders = valuesArray.flatMap(Object.values);
-			const result = await this.query<UpsertResult>(sql, [...placeholders, ...whereParamsProcessed]);
+			let sql = `UPDATE ${table} SET ${setClause} WHERE ${whereClause}`;
+			const valuesParams = Object.values(values);
+			const result = await this.execute(sql, [...valuesParams, ...whereParamsProcessed]);
 
 			// Check if result has error
 			if (result && typeof result === 'object' && 'error' in result) {
 				return result;
 			}
 
-			return Array.isArray(result) ? result[0] : result;
+			const finalResult = Array.isArray(result) ? result[0] : result;
+			return finalResult;
 		} catch (err: any) {
 			console.error('Update error:', err);
-			return { error: err.message || 'Update failed' };
+			return { affectedRows: 0, error: err };
 		}
 	}
 
@@ -414,7 +498,10 @@ export class MariaDB {
 	// TODO: chunk & asArray ???
 	async select(params: QueryParams): Promise<any> {
 		const { command = 'findMany', select = '*', from, join, joinType, where, whereParams, order, group, limit, page = 1, offset, chunk, options, asArray = false } = params;
-		if (!from) return { error: 'from is required' };
+
+		if (!from) {
+			return { affectedRows: 0, error: 'from is required' } as UpsertResult;
+		}
 
 		try {
 			// Select field oluştur
@@ -498,7 +585,7 @@ export class MariaDB {
 
 			// Query oluştur
 			const sql = `SELECT ${selectClause} FROM ${fromClause} ${joinClause} ${whereClause} ${groupClause} ${orderClause} ${limitClause}`.trim().replace(/\s+/g, ' ');
-			const result = await this.query(sql, whereParams || [], options || {});
+			const result = await this.query(sql, whereParams || []);
 
 			// Check if result has error
 			if (result && typeof result === 'object' && 'error' in result) {
@@ -507,12 +594,13 @@ export class MariaDB {
 
 			// findFirst should return first row
 			if (command === 'findFirst' && Array.isArray(result) && result.length > 0) {
-				return asArray ? [result[0]] : result[0];
+				const finalResult = asArray ? [result[0]] : result[0];
+				return finalResult;
 			}
 			return result;
 		} catch (err: any) {
 			console.error('Select error:', err);
-			return { error: err.message || 'Select failed' };
+			return { affectedRows: 0, error: err };
 		}
 	}
 
@@ -550,22 +638,20 @@ export class MariaDB {
 
 
 
-	public async execute(sql: string | QueryOptions, values?: any, params: Record<string, any>[] = []): Promise<any> {
-		if (!this.pool) return { error: 'pool is not initialized' };
-		if (params.length > 0 && typeof sql === 'string') sql = { sql: sql, ...params };
+	public async execute(sql: string | QueryOptions, values?: any): Promise<any> {
+		if (!this.pool) return { error: 'Pool is not initialized' };
 
 		try {
 			const result = await this.pool.execute(sql, values);
 			return result;
 		} catch (error: SqlError | any) {
-			console.log(error.sqlMessage);
-			return { error: error.code || 'unknown error' };
+			return { affectedRows: 0, error: error };
 		}
 	}
 
-	public async batch(sql: string | QueryOptions, values?: any[], params: Record<string, any>[] = []): Promise<UpsertResult> {
-		if (!this.pool) return { error: 'pool is not initialized' };
-		if (params.length > 0 && typeof sql === 'string') sql = { sql: sql, ...params };
+	public async batch(sql: string | QueryOptions, values?: any[]): Promise<UpsertResult> {
+
+		if (!this.pool) return { affectedRows: 0, error: 'Pool is not initialized' };
 
 		try {
 			const conn = await this.pool.getConnection();
@@ -573,8 +659,7 @@ export class MariaDB {
 			conn.release();
 			return result;
 		} catch (error: SqlError | any) {
-			console.log(error.sqlMessage);
-			return { error: error.code || 'unknown error' };
+			return { affectedRows: 0, error: error };
 		}
 	}
 
@@ -659,154 +744,275 @@ export class MariaDB {
 
 
 
-	async getJsonValue(table: string, where: string, jsonField: string, path: string = '*') {
+	async getJsonValue(table: string, where: string, jsonField: string, path?: string, returnError?: false): Promise<any>;
+	async getJsonValue(table: string, where: string, jsonField: string, path: string | undefined, returnError: true): Promise<Result<any>>;
+	async getJsonValue(table: string, where: string, jsonField: string, path: string = '*', returnError?: boolean): Promise<any | Result<any>> {
+		const shouldReturnError = returnError ?? this.returnError;
+
 		try {
 			const sql = `SELECT JSON_VALUE(${jsonField}, ?) as value FROM ${table} WHERE ${where} LIMIT 1`;
-			const result = await this.query(sql, [`$.${path}`]);
+			const result = await this.query(sql, [`$.${path}`], shouldReturnError as any);
 
 			// Check if result has error
 			if (result && typeof result === 'object' && 'error' in result) {
+				if (shouldReturnError) {
+					return { data: null, error: new Error(String(result.error)) } as Result<any>;
+				}
 				return result;
 			}
 
-			return result;
+			return shouldReturnError ? { data: result, error: null } as Result<any> : result;
 		} catch (err: any) {
 			console.error('getJsonValue error:', err);
+			if (shouldReturnError) {
+				return { data: null, error: new Error(err.message || 'getJsonValue failed') } as Result<any>;
+			}
 			return { error: err.message || 'getJsonValue failed' };
 		}
 	}
 
-	async getJsonExtract(table: string, where: string, jsonField: string, path: string = '') {
+	async getJsonExtract(table: string, where: string, jsonField: string, path?: string, returnError?: false): Promise<any>;
+	async getJsonExtract(table: string, where: string, jsonField: string, path: string | undefined, returnError: true): Promise<Result<any>>;
+	async getJsonExtract(table: string, where: string, jsonField: string, path: string = '', returnError?: boolean): Promise<any | Result<any>> {
+		const shouldReturnError = returnError ?? this.returnError;
+
 		try {
 			const sql = `SELECT JSON_EXTRACT(${jsonField}, ?) as value FROM ${table} WHERE ${where} LIMIT 1`;
-			const result = await this.query<{ value: any }>(sql, [path ? `$.${path}` : '$']);
+			const result = await this.query<{ value: any }>(sql, [path ? `$.${path}` : '$'], shouldReturnError as any);
 
 			// Check if result has error
 			if (result && typeof result === 'object' && 'error' in result) {
+				if (shouldReturnError) {
+					return { data: null, error: new Error(String(result.error)) } as Result<any>;
+				}
 				return result;
 			}
 
-			return Array.isArray(result) ? result[0]?.value : result;
+			const finalResult = Array.isArray(result) ? result[0]?.value : result;
+			return shouldReturnError ? { data: finalResult, error: null } as Result<any> : finalResult;
 		} catch (err: any) {
 			console.error('getJsonExtract error:', err);
+			if (shouldReturnError) {
+				return { data: null, error: new Error(err.message || 'getJsonExtract failed') } as Result<any>;
+			}
 			return { error: err.message || 'getJsonExtract failed' };
 		}
 	}
 
-	async setJsonValue(table: string, where: string, jsonField: string, path: string, value: any) {
-		if (!where) return { error: 'where is required' };
+	async setJsonValue(table: string, where: string, jsonField: string, path: string, value: any, returnError?: false): Promise<any>;
+	async setJsonValue(table: string, where: string, jsonField: string, path: string, value: any, returnError: true): Promise<Result<any>>;
+	async setJsonValue(table: string, where: string, jsonField: string, path: string, value: any, returnError?: boolean): Promise<any | Result<any>> {
+		const shouldReturnError = returnError ?? this.returnError;
+
+		if (!where) {
+			const errorResult = { error: 'where is required' };
+			if (shouldReturnError) {
+				return { data: null, error: new Error('where is required') } as Result<any>;
+			}
+			return errorResult;
+		}
 
 		try {
 			const sql = `UPDATE ${table} SET ${jsonField} = JSON_SET(${jsonField}, ?, ?) WHERE ${where}`;
-			const result = await this.query(sql, [`$.${path}`, value]);
+			const result = await this.query(sql, [`$.${path}`, value], shouldReturnError as any);
 
 			// Check if result has error
 			if (result && typeof result === 'object' && 'error' in result) {
+				if (shouldReturnError) {
+					return { data: null, error: new Error(String(result.error)) } as Result<any>;
+				}
 				return result;
 			}
 
-			return result;
+			return shouldReturnError ? { data: result, error: null } as Result<any> : result;
 		} catch (err: any) {
 			console.error('setJsonValue error:', err);
+			if (shouldReturnError) {
+				return { data: null, error: new Error(err.message || 'setJsonValue failed') } as Result<any>;
+			}
 			return { error: err.message || 'setJsonValue failed' };
 		}
 	}
 
-	async setJsonObject(table: string, where: string, jsonField: string, path: string, value: Record<string, any>) {
-		if (!where) return { error: 'where is required' };
+	async setJsonObject(table: string, where: string, jsonField: string, path: string, value: Record<string, any>, returnError?: false): Promise<any>;
+	async setJsonObject(table: string, where: string, jsonField: string, path: string, value: Record<string, any>, returnError: true): Promise<Result<any>>;
+	async setJsonObject(table: string, where: string, jsonField: string, path: string, value: Record<string, any>, returnError?: boolean): Promise<any | Result<any>> {
+		const shouldReturnError = returnError ?? this.returnError;
+
+		if (!where) {
+			const errorResult = { error: 'where is required' };
+			if (shouldReturnError) {
+				return { data: null, error: new Error('where is required') } as Result<any>;
+			}
+			return errorResult;
+		}
 
 		try {
 			let flattenedValues: any;
 			if (Array.isArray(value)) {
 				flattenedValues = value.flat();
 				const sql = `UPDATE ${table} SET ${jsonField} = JSON_SET(${jsonField}, ?, JSON_ARRAY(${flattenedValues})) WHERE ${where}`;
-				const result = await this.query(sql, [`$.${path}`, ...flattenedValues]);
+				const result = await this.query(sql, [`$.${path}`, ...flattenedValues], shouldReturnError as any);
 
 				// Check if result has error
 				if (result && typeof result === 'object' && 'error' in result) {
+					if (shouldReturnError) {
+						return { data: null, error: new Error(String(result.error)) } as Result<any>;
+					}
 					return result;
 				}
 
-				return result;
+				return shouldReturnError ? { data: result, error: null } as Result<any> : result;
 			} else {
 				flattenedValues = Object.entries(value).flat();
 				const sql = `UPDATE ${table} SET ${jsonField} = JSON_SET(${jsonField}, ?, JSON_OBJECT(${Array(flattenedValues.length / 2)
 					.fill('?,?')
 					.join(',')})) WHERE ${where}`;
-				const result = await this.query(sql, [`$.${path}`, ...flattenedValues]);
+				const result = await this.query(sql, [`$.${path}`, ...flattenedValues], shouldReturnError as any);
 
 				// Check if result has error
 				if (result && typeof result === 'object' && 'error' in result) {
+					if (shouldReturnError) {
+						return { data: null, error: new Error(String(result.error)) } as Result<any>;
+					}
 					return result;
 				}
 
-				return result;
+				return shouldReturnError ? { data: result, error: null } as Result<any> : result;
 			}
 		} catch (err: any) {
 			console.error('setJsonObject error:', err);
+			if (shouldReturnError) {
+				return { data: null, error: new Error(err.message || 'setJsonObject failed') } as Result<any>;
+			}
 			return { error: err.message || 'setJsonObject failed' };
 		}
 	}
 
-	async findJsonValue(table: string, where: string, jsonField: string, path: string, value: any) {
+	async findJsonValue(table: string, where: string, jsonField: string, path: string, value: any, returnError?: false): Promise<any>;
+	async findJsonValue(table: string, where: string, jsonField: string, path: string, value: any, returnError: true): Promise<Result<any>>;
+	async findJsonValue(table: string, where: string, jsonField: string, path: string, value: any, returnError?: boolean): Promise<any | Result<any>> {
+		const shouldReturnError = returnError ?? this.returnError;
+
 		try {
 			if (!where) where = '1=1';
 			const sql = `SELECT * FROM ${table} WHERE ${where} AND JSON_VALUE(${jsonField}, ?) = ?`;
-			const result = await this.query(sql, [`$.${path}`, value]);
+			const result = await this.query(sql, [`$.${path}`, value], shouldReturnError as any);
 
 			// Check if result has error
 			if (result && typeof result === 'object' && 'error' in result) {
+				if (shouldReturnError) {
+					return { data: null, error: new Error(String(result.error)) } as Result<any>;
+				}
 				return result;
 			}
 
-			return result;
+			return shouldReturnError ? { data: result, error: null } as Result<any> : result;
 		} catch (err: any) {
 			console.error('findJsonValue error:', err);
+			if (shouldReturnError) {
+				return { data: null, error: new Error(err.message || 'findJsonValue failed') } as Result<any>;
+			}
 			return { error: err.message || 'findJsonValue failed' };
 		}
 	}
 
-	async beginTransaction(): Promise<void> {
-		if (!this.pool) return { error: 'Pool is not initialized' } as any;
+	async beginTransaction(returnError?: false): Promise<void | { error: string }>;
+	async beginTransaction(returnError: true): Promise<Result<void>>;
+	async beginTransaction(returnError?: boolean): Promise<void | { error: string } | Result<void>> {
+		const shouldReturnError = returnError ?? this.returnError;
+
+		if (!this.pool) {
+			if (shouldReturnError) {
+				return { data: undefined as void, error: new Error('Pool is not initialized') } as Result<void>;
+			}
+			return { error: 'Pool is not initialized' };
+		}
 
 		try {
 			await this.pool.query('BEGIN');
+			if (shouldReturnError) {
+				return { data: undefined as void, error: null } as Result<void>;
+			}
 		} catch (error: SqlError | any) {
 			console.error('beginTransaction error:', error.sqlMessage);
-			return { error: error.sqlMessage } as any;
+			if (shouldReturnError) {
+				return { data: undefined as void, error: new Error(error.sqlMessage) } as Result<void>;
+			}
+			return { error: error.sqlMessage };
 		}
 	}
 
-	async commit(): Promise<void> {
-		if (!this.pool) return { error: 'Pool is not initialized' } as any;
+	async commit(returnError?: false): Promise<void | { error: string }>;
+	async commit(returnError: true): Promise<Result<void>>;
+	async commit(returnError?: boolean): Promise<void | { error: string } | Result<void>> {
+		const shouldReturnError = returnError ?? this.returnError;
+
+		if (!this.pool) {
+			if (shouldReturnError) {
+				return { data: undefined as void, error: new Error('Pool is not initialized') } as Result<void>;
+			}
+			return { error: 'Pool is not initialized' };
+		}
 
 		try {
 			await this.pool.query('COMMIT');
+			if (shouldReturnError) {
+				return { data: undefined as void, error: null } as Result<void>;
+			}
 		} catch (error: SqlError | any) {
 			console.error('commit error:', error.sqlMessage);
-			return { error: error.sqlMessage } as any;
+			if (shouldReturnError) {
+				return { data: undefined as void, error: new Error(error.sqlMessage) } as Result<void>;
+			}
+			return { error: error.sqlMessage };
 		}
 	}
 
-	async rollback(): Promise<void> {
-		if (!this.pool) return { error: 'Pool is not initialized' } as any;
+	async rollback(returnError?: false): Promise<void | { error: string }>;
+	async rollback(returnError: true): Promise<Result<void>>;
+	async rollback(returnError?: boolean): Promise<void | { error: string } | Result<void>> {
+		const shouldReturnError = returnError ?? this.returnError;
+
+		if (!this.pool) {
+			if (shouldReturnError) {
+				return { data: undefined as void, error: new Error('Pool is not initialized') } as Result<void>;
+			}
+			return { error: 'Pool is not initialized' };
+		}
 
 		try {
 			await this.pool.query('ROLLBACK');
+			if (shouldReturnError) {
+				return { data: undefined as void, error: null } as Result<void>;
+			}
 		} catch (error: SqlError | any) {
 			console.error('rollback error:', error.sqlMessage);
-			return { error: error.sqlMessage } as any;
+			if (shouldReturnError) {
+				return { data: undefined as void, error: new Error(error.sqlMessage) } as Result<void>;
+			}
+			return { error: error.sqlMessage };
 		}
 	}
 
 
 
-	async close(): Promise<void> {
+	async close(returnError?: false): Promise<void | { error: string }>;
+	async close(returnError: true): Promise<Result<void>>;
+	async close(returnError?: boolean): Promise<void | { error: string } | Result<void>> {
+		const shouldReturnError = returnError ?? this.returnError;
+
 		try {
 			if (this.pool) await this.pool.end();
+			if (shouldReturnError) {
+				return { data: undefined as void, error: null } as Result<void>;
+			}
 		} catch (error: SqlError | any) {
 			console.error('close error:', error.sqlMessage);
-			return { error: error.sqlMessage } as any;
+			if (shouldReturnError) {
+				return { data: undefined as void, error: new Error(error.sqlMessage) } as Result<void>;
+			}
+			return { error: error.sqlMessage };
 		}
 	}
 

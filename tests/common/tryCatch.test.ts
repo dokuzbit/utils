@@ -1,3 +1,10 @@
+/**
+ * @description tryCatch test
+ * @lastModified 09.10.2025
+ * 
+ * Pass 15 / 15 tests
+ */
+
 import { describe, expect, test } from "bun:test";
 import { tryCatch } from "../../common/tryCatch";
 

@@ -1,3 +1,18 @@
+/**
+ * ACL (Access Control List) is a lightweight, high-performance permission management system that uses hash-based short codes for efficient permission storage and checking. It supports role-based access control (RBAC) with hierarchical permissions.
+ * @lastModified 09.10.2025
+ * 
+ * @example
+ * import { acl } from "@dokuzbit/utils/server";
+ * 
+ * const permissions = acl.buildShortList(user, roles);
+ * if (acl.checkPermission(permissions, "articles:read")) {
+ *   console.log("User can read articles");
+ * }
+ * 
+ */
+
+
 type User = {
     roles: string[];
     rules: string[];

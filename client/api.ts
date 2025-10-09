@@ -1,13 +1,20 @@
 /**
  * API class to fetch data from the server
  * @lastModified 23.11.2024
- *
- * @constructor
- * @param baseUrl - The base URL of the server
- *
- * @method fetch
- * @param url - The URL to fetch data from
- * @returns {result:T|null,error:string|null} - The result of the fetch operation
+ * 
+ * @example
+ * // Setup
+ * import { api } from "@dokuzbit/utils/client";
+ * api.setBaseUrl("https://jsonplaceholder.typicode.com/");
+ * api.setHeader("Authorization", "Bearer 1234567890");
+ * 
+ * // GET with cache with default 300 seconds ttl cache
+ * const { data, error, status, ok } = await api.get<User>("users/1");
+ * // GET with query params (?id=1) and 600 seconds ttl cache
+ * const { data, error, status, ok } = await api.get<User>("users/",{ id:1},600);
+ * 
+ * // POST/PUT/DELETE/PATCH
+ * const { error } = await api.post<Post>("posts", { title: "test", body: "test" });
  */
 
 import { cache } from './cache';
@@ -16,11 +23,12 @@ type Payload = | string | number | boolean | null | Record<string, unknown> | Pa
 
 let base = ''
 let globalApiBaseUrl: string = base;
+
 interface Response<T> {
 	data: T | null;
-	error?: any;
-	status?: number;
-	ok?: boolean;
+	error: unknown;
+	status: number;
+	ok: boolean;
 }
 
 export class Api {
@@ -94,7 +102,6 @@ export class Api {
 			if (cached) return { data: cached, error: null, status: 200, ok: true };
 		} else {
 			// ttl is 0, so we also remove the cache
-			console.log('removing cache', url);
 			cache.remove(url);
 		}
 		const result = await this.request<T>(url, 'GET');

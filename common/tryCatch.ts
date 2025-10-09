@@ -1,15 +1,16 @@
 /**
  * Safely execute a function and return the result with error handling
- * @param fn - The function to execute (can be sync or async)
- * @returns An object with data and error properties
+ * @lastModified 09.10.2025
+ * 
  * @example
- * // Synchronous usage
+ * import { tryCatch } from "@dokuzbit/utils/common";
+ * 
  * const result = tryCatch(() => JSON.parse(str));
  * if (result.error) console.error(result.error);
  * 
- * // Asynchronous usage
- * const result = await tryCatch(async () => fetch('/api/data'));
- * if (result.error) console.error(result.error);
+ * const { data, error } = await tryCatch(async () => fetch('/api/data'));
+ * if (error) console.error(error);
+ * 
  */
 
 export type Result<T> = {

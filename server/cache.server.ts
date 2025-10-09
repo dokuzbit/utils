@@ -1,25 +1,29 @@
 /**
- * @version 0.2.12
  * Cache sınıfı, bellekte verileri saklamak ve erişim hızını artırmak için kullanılır.
+ * @lastModified 09.10.2025
  * 
- * @method set: Veriyi cache'e ekler.
- * @param key: Cache'e eklenen verinin anahtarı.
- * @param value: Cache'e eklenen veri.
- * @param ttl: Cache'teki verinin süresi. (saniye)
- * @param expireDate: Cache'teki verinin süresi. (ISO formatında veya + 1s, +1m, +1h, +1d, +1w)
- * @method get: Cache'teki veriyi döndürür.
- * @method getMeta: Cache'teki verinin meta bilgilerini döndürür.
- * @method remove: Cache'teki veriyi siler.
- * @method clear: Cache'i temizler.
- * @method getSize: Cache'teki verilerin toplam boyutunu döndürür.
+ * @example
+ * import { cache } from "@dokuzbit/utils/server";
+ * 
+ * // Set data to cache stores default ttl 300 seconds
+ * cache.set("user-123", { name: "John", age: 30 });
+ * const user = cache.get("user-123");
+ * 
+ * // Set data to cache stores 10 seconds ttl
+ * cache.set("user-123", { name: "John", age: 30 }, 10);
+ * const user = cache.get("user-123");
+ * 
+ * // Remove data from cache
+ * cache.remove("user-123");
+ * 
+ * // Clear all cache data
+ * cache.clear();
+ * 
  */
 
+// TODO: Will add parameter to set cache store 'memory' | 'memcached' | 'redis' | 'sqlite'
 
-// import { Database } from "bun:sqlite";
 let cacheDB: any | null = null;
-// const cacheDB = new Database(process.env.NODE_ENV === 'production' ? "/www/sqlite/cache.db" : "cache.db");
-// cacheDB.exec("pragma journal_mode = WAL;");
-// cacheDB.exec("CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT, expireDate TEXT);");
 
 interface CacheItem<T> {
     value: T;
