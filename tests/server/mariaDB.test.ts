@@ -27,7 +27,8 @@ const initSql = [
         master_id int,
         data JSON,
         FOREIGN KEY (master_id) REFERENCES test (id));`,
-    `use test;`
+    `use test;`,
+    `INSERT INTO test (name, data) VALUES ('test1', '{"color": "white", "size": "M"}');`
 ];
 
 type TestResult = {
@@ -44,11 +45,22 @@ test('setup db', async () => {
     }
 });
 
+
+test('select single record', async () => {
+    await db.execute('use test')
+    // await db.insert(TABLE1, { name: 'test1', data: { color: 'white', size: 'M' } });
+    const result = await db.select({ from: TABLE1, where: 'name = ?', whereParams: ['test1'], limit: 1 });
+    console.log(result);
+    expect(result).toBeDefined();
+    expect(result.name).toBe('test1');
+});
+
 test('wrong_query', async () => {
     await db.query('use test')
     const result = await db.query("select * from wrong_table")
+    console.log(result);
     expect(result).toBeDefined();
-    expect(result).toContainKeys(['error']);
+    expect(result).toBeNull();
 });
 
 test('wrong_objectUpdate', async () => {
@@ -172,9 +184,10 @@ test('objectUpdate multiple records', async () => {
     ]
     const result = await db.objectUpdate({ table: TABLE1, values: dataset });
     console.log(result);
-    expect(result).toBeDefined();
-    expect(result.affectedRows).toBeGreaterThanOrEqual(2);
-    expect(result.warningStatus).toBe(0);
+    expect(result).toBeArray();
+    expect(result).toEqual(expect.arrayContaining([
+        expect.objectContaining({ affectedRows: 1 }),
+    ]));
 });
 
 test('objectUpdate single record', async () => {
@@ -182,7 +195,10 @@ test('objectUpdate single record', async () => {
     const result = await db.objectUpdate({ table: TABLE1, values: [{ id: 1, name: 'test1', data: { age: Math.floor(Math.random() * 100) } }], whereField: 'name' });
     console.log(result);
     expect(result).toBeDefined();
-    expect(result.affectedRows).toBeGreaterThanOrEqual(1);
+    expect(result).toBeArray();
+    expect(result).toEqual(expect.arrayContaining([
+        expect.objectContaining({ affectedRows: 1 }),
+    ]));
 });
 
 

@@ -159,6 +159,8 @@ export class MariaDB {
 		// Eğer values bir obje ise ve sql bir select ise namedPlaceholders'ı true yapalım
 		if (sql.sql.toLowerCase().startsWith('select') && values?.constructor === Object) sql = { ...sql, namedPlaceholders: true };
 		let result
+
+		// Run sql query with try catch
 		try {
 			result = await this.pool.query(sql, values);
 		} catch (error: SqlError | any) {
