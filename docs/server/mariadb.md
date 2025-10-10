@@ -5,9 +5,10 @@
 [Installation](../common.md#installation), [Singleton Pattern](../common.md#singleton-pattern), [Multiton Pattern](../common.md#multiton-pattern) and [Default Import](../common.md#default-import) is documented in [here](../common.md)
 
 ```ts
-import { mariadb } from "@dokuzbit/utils/server";
+import { MariaDB } from "@dokuzbit/utils/server";
+const mariadb = new MariaDB;
 // or
-import db from "@dokuzbit/utils/server/mariadb";
+import db from "@dokuzbit/utils/server/mariadb"; 
 // ☝️ We export the singleton instance as default for easy aliasing
 ```
 
@@ -35,21 +36,29 @@ mariadb.config(config);
   _example:_ 'SELECT _ FROM users where id = ?' or 'SELECT _ FROM users where id = :id'
 - params: `array` | `object` - array of values for ordered placeholders or object for named placeholders
   _example:_ `[1]` or `{ id: 1 }`
-- returns: `object` | `array` - returns object if limit is 1, otherwise returns array of objects
+- returns: `object` | `array` | `any` | `{error: any}` - return array / object / value / {error: any} depending on the query (see below)
 
 ```ts
-const result = await mariadb.query("SELECT * FROM users where id = ?", [1]);
-const result = await mariadb.query("SELECT * FROM users where id = :id", {
-  id: 1,
-});
 // you can use ? or :id (named placeholders) to bind the values, both will work the same
-```
+const result = await mariadb.query("SELECT * FROM users where id = ?", [ 1 ]);
+const result = await mariadb.query("SELECT * FROM users where id = :id", { id: 1 });
+// result = [{ id: 1, name: 'John', email: 'john@example.com' },{ id: 2, name: 'Jane', email: 'jane@example.com' }]
 
-```ts
-const result = await mariadb.query("SELECT * FROM users where id = ? limit 1", [
-  id,
-]);
 // adding limit 1 to the query will return a single object instead of an array
+const result = await mariadb.query("SELECT * FROM users where id = ? limit 1", [ id ]);
+// result = { id: 1, name: 'John', email: 'john@example.com' }
+
+// adding limit 1 to the single column query will return a single value instead of an object
+const result = await mariadb.query("SELECT name FROM users where id = ? limit 1", [ id ]);
+// result = 'John'
+
+// you can use colon notation to get json values
+const result = await mariadb.query("SELECT data:color,data:size FROM users where data:contact.phone = ?", [ phone ]);
+// result = { color: 'red', size: 'M' }
+
+// errror handling is supported by flat object syntax
+const result = await mariadb.query("SELECT * FROM WRONG_TABLE where id = ?", [ 1 ]);
+if('error' in result) console.log(result.error.code); // 'ER_NO_SUCH_TABLE'
 ```
 
 ## .objectUpdate({table, values, whereField}) - Update table with JS Object
@@ -62,6 +71,7 @@ const result = await mariadb.query("SELECT * FROM users where id = ? limit 1", [
 - returns: `object` - standart mysql result object. _example:_ `{ affectedRows: 1, insertId: 1, warningStatus: 0 }`
 
 ```ts
+// Single Record:this will update the user with id 1 to have the name John. You can omit whereField if whereField is id as it's the default
 const result = await mariadb.objectUpdate({
   table: "users",
   values: { id: 1, name: "John" },
@@ -71,7 +81,8 @@ const result = await mariadb.objectUpdate({
   table: "users",
   values: { id: 1, name: "John" },
 });
-// Single Record:this will update the user with id 1 to have the name John. You can omit whereField if whereField is id as it's the default
+
+// Multiple Records: this will update the users with id 1 and 2 to have the name John and Jane respectively
 const result = await db.objectUpdate({
   table: "users",
   values: [
@@ -80,7 +91,6 @@ const result = await db.objectUpdate({
   ],
   whereField: "id",
 });
-// Multiple Records: this will update the users with id 1 and 2 to have the name John and Jane respectively
 ```
 
 ## .insert({table, values}) - Insert a single record or multiple records into a table

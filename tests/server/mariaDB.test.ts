@@ -376,25 +376,25 @@ describe('MariaDB Utilities Tests', () => {
         `);
 
         // Dot notation ile sorgu (otomatik olarak JSON_VALUE'ya dönüşmeli)
-        const result1 = await db.query<any>('SELECT id, name, data.color as color FROM json_test WHERE name = ? limit 1', ['test1']);
+        const result1 = await db.query<any>('SELECT id, name, data:color as color FROM json_test WHERE name = ? limit 1', ['test1']);
         expect(result1).toBeDefined();
         expect(result1.color).toBe('red');
 
         // İç içe path testi
-        const result2 = await db.query<any[]>('SELECT id, data.metadata.variant as variant FROM json_test WHERE name = ?', ['test3']);
+        const result2 = await db.query<any[]>('SELECT id, data:metadata.variant as variant FROM json_test WHERE name = ?', ['test3']);
         expect(result2).toBeDefined();
         expect(result2[0]).toBeDefined();
         expect(result2[0].variant).toBe('dark');
 
         // JSON in where clause
-        const result3 = await db.query<any>('SELECT * FROM json_test WHERE data.color = ?', ['red']);
+        const result3 = await db.query<any>('SELECT * FROM json_test WHERE data:color = ?', ['red']);
         expect(result3).toBeDefined();
         expect(result3.length).toBe(1);
         expect(result3[0].name).toBe('test1');
 
     });
 
-    test('query with error', async () => {
+    test('query with error column name', async () => {
         const result = await db.query('SELECT 1 as error, name FROM json_test limit 1');
         console.log("result", result);
         expect(result).toBeDefined();

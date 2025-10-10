@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.23] - October 10, 2025
+
+### 🐛 Bug Fixes
+
+- mariadb now support colon notation in query method ie: `select data:color from json_test where data:contact.phone = ?`
+  0.2.22 bug fix which use dot notation which conflict with table alias 
+
+---
+
 ## [0.2.22] - October 10, 2025
 
 ### 🔄 Changed

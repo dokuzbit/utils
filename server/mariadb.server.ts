@@ -18,11 +18,8 @@
 * // NOTE: limit 1 & selecting only one column will return single value instead of object
 * const result = await mariadb.query("SELECT name FROM users where id = :id limit 1", { id: 1 }); // NOTE: Returns single value
 * 
-* 
-* 
-* 
-* 
-* 
+* // NOTE: Can get json value with colon notation
+* const result = await mariadb.query("SELECT data:color, data:size FROM users where data:contact.phone = ? ", [ "1234567890"]); // NOTE: data field is a json field
 * 
 * // TODO: Will implement stream support later (data in chunks)
 */
@@ -200,13 +197,12 @@ export class MariaDB {
 
 		// Önce string sql ile object sql yapalım
 		if (typeof sql === 'string') {
-			// if fields have . notation convert it to JSON_VALUE like this: JSON_VALUE(jsonField, '$.path')
-			// Match patterns like: data.color or data.color.variant
+			// if fields have : notation convert it to JSON_VALUE like this: JSON_VALUE(jsonField, '$.path')
+			// Match patterns like: data:color or data:color.variant
 			// Replace with: JSON_VALUE(data, '$.color') or JSON_VALUE(data, '$.color.variant')
 			sql = sql.replace(
-				/\b(\w+)\.(\w+(?:\.\w+)*)\b/g,
+				/\b(\w+):(\w+(?:\.\w+)*)\b/g,
 				(match, field, path) => {
-					// Don't replace if it's in quotes or part of table.column syntax
 					return `JSON_VALUE(${field}, '$.${path}')`;
 				}
 			);
