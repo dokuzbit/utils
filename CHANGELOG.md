@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.24] - November 28, 2025
+
+### 🔄 Changed
+
+- nats config nıw supports reply header
+- mariadb config now supports meta option
+
 ## [0.2.23] - October 10, 2025
 
 ### 🐛 Bug Fixes

@@ -82,6 +82,7 @@ type DBConfig = {
 	collation?: string;
 	charset?: string;
 	returnError?: boolean;
+	meta?: boolean;
 }
 type QueryParams = {
 	command?: 'findFirst' | 'findMany' | 'findAll';
@@ -150,6 +151,7 @@ export class MariaDB {
 	 * 
 	 */
 	config(dbConfig: DBConfig) {
+		this.dbConfig.meta = dbConfig.meta || false;
 		this.dbConfig = mergeDeep(this.dbConfig, dbConfig);
 		this.dbConfig.trace = dbConfig.trace || process.env.NODE_ENV === 'development';
 		this.dbConfig.connectionLimit = dbConfig.connectionLimit || 5;

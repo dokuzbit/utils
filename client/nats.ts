@@ -15,6 +15,7 @@ export interface NatsConfig {
 	user?: string;
 	pass?: string;
 	nkey?: string;
+	reply?: string;
 }
 
 export class NatsWrapper {
@@ -26,18 +27,20 @@ export class NatsWrapper {
 	private user: string = '';
 	private pass: string = '';
 	private nkey: string = '';
+	private reply: string = '';
 
 	constructor(config?: NatsConfig) {
 		if (config) {
-			this.config(config.servers, config.user, config.pass, config.nkey);
+			this.config(config.servers, config.user, config.pass, config.nkey, config.reply);
 		}
 	}
 
-	public config(servers: string | string[] = '', user: string = '', pass: string = '', nkey: string = ''): void {
+	public config(servers: string | string[] = '', user: string = '', pass: string = '', nkey: string = '', reply: string = ''): void {
 		this.servers = servers;
 		this.user = user;
 		this.pass = pass;
 		this.nkey = nkey;
+		this.reply = reply;
 	}
 
 	private async connect(): Promise<void> {
@@ -66,6 +69,13 @@ export class NatsWrapper {
 
 	async publish(subject: string, data: string | object, options?: PublishOptions): Promise<void> {
 		if (!this.nc) await this.connect();
+		// if global reply is set, add it to the options
+		if (this.reply) {
+			options = {
+				...options,
+				reply: this.reply
+			};
+		}
 		const encodedData = typeof data === 'string'
 			? this.sc.encode(data)
 			: this.jc.encode(data);
