@@ -82,10 +82,16 @@ export class Session {
 			secure: options?.secure || this.sm.secure,
 			maxAge: options?.maxAge || this.sm.maxAge
 		});
-		const newToken = await this.getToken(options?.cookieName || this.sm.cookieName, true, true);
-		const remainingTime = newToken.exp - Date.now() / 1000;
-		cache.set(options?.cookieName || this.sm.cookieName, newToken.payload, remainingTime);
-		return newToken;
+
+		// ESKİ KOD (HATALI):
+		// const newToken = await this.getToken(...);  ← cookies.get() eski cookie döndürüyor!
+
+		// YENİ KOD (DOĞRU):
+		// Yeni token'ı direkt decode et, cookie'den okuma
+		const decoded = jwt.decode(token) as JwtPayload;
+		const remainingTime = decoded.exp! - Date.now() / 1000;
+		cache.set(options?.cookieName || this.sm.cookieName, data, remainingTime);
+		return this.returnPayload({ ...data, exp: decoded.exp, iat: decoded.iat }, false, null);
 	}
 
 	/**

@@ -25,10 +25,12 @@ let base = ''
 let globalApiBaseUrl: string = base;
 
 interface Response<T> {
-	data: T | null;
+	ok: boolean;
+	success: boolean;
 	error: unknown;
 	status: number;
-	ok: boolean;
+	statusText: string;
+	data: T | null;
 }
 
 export class Api {
@@ -63,6 +65,7 @@ export class Api {
 		method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
 		payload: Payload = null
 	): Promise<Response<T>> => {
+
 		const options: RequestInit = {
 			method: method,
 			headers: this.headers,
@@ -71,15 +74,28 @@ export class Api {
 
 		try {
 			const result = await fetch(`${globalApiBaseUrl}${url}`, options);
-			if (result.ok) return { data: await result.json(), error: null, status: result.status, ok: result.ok };
-			const message = await result.json();
-			return { data: null, error: message || 'Unknown error', status: result.status, ok: result.ok };
+
+			const text = await result.text();
+			let parsed: unknown = null;
+			if (text) {
+				try {
+					parsed = JSON.parse(text);
+				} catch (err) {
+					parsed = text;
+				}
+			}
+
+			if (result.ok) return { data: parsed as T, error: null, status: result.status, statusText: result.statusText, ok: true, success: true };
+
+			return { data: null, error: parsed || result.statusText || 'Unknown error', status: result.status, statusText: result.statusText, ok: false, success: false };
 		} catch (err: unknown) {
 			return {
 				data: null,
 				error: err instanceof Error ? { name: err.name, message: err.message, cause: err?.cause } : 'Unknown error',
 				status: 500,
+				statusText: 'Internal Server Error',
 				ok: false,
+				success: false,
 			};
 		}
 	};
@@ -93,13 +109,15 @@ export class Api {
 		// if payload exists, add it to the url as query params
 		if (convertedPayload) {
 			const queryString = new URLSearchParams(convertedPayload).toString();
-			if (queryString) url = `${url}?${queryString}`;
+			if (queryString) {
+				const separator = url.includes('?') ? '&' : '?';
+				url = `${url}${separator}${queryString}`;
+			}
 		}
 
 		if (ttl > 0) {
 			const cached = await cache.get(url);
-			console.log('cached', url);
-			if (cached) return { data: cached, error: null, status: 200, ok: true };
+			if (cached) return { data: cached, error: null, status: 200, statusText: 'OK', ok: true, success: true };
 		} else {
 			// ttl is 0, so we also remove the cache
 			cache.remove(url);

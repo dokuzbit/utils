@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.25] - December 4, 2025
+
+### 🐛 Bug Fixes
+
+- session.server.ts bugfix for setToken method. Fixes session loose after server restart.
+
+### 🔄 Changed
+
+- Add statusText and success properties to api response
+
 ## [0.2.24] - November 28, 2025
 
 ### 🔄 Changed
