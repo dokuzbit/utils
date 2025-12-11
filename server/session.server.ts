@@ -113,7 +113,6 @@ export class Session {
 			cache.set(cookieName || this.sm.cookieName, payload, remainingTime);
 			return this.returnPayload(payload, false, null);
 		} catch (error) {
-			cache.remove(cookieName || this.sm.cookieName);
 			if (error instanceof jwt.TokenExpiredError) {
 				let payload = jwt.decode(cookie) as PayloadInterface;
 				if (callback) {
@@ -121,7 +120,10 @@ export class Session {
 						if (typeof callback === 'function') {
 							let newPayload = await callback(payload);
 							// if newPayload is false null or undefined return expired true
-							if (!newPayload) return this.returnPayload(payload, true, null);
+							if (!newPayload) {
+								cache.remove(cookieName || this.sm.cookieName);
+								return this.returnPayload(payload, true, null);
+							}
 
 							// if newPayload is true set it to the original payload
 							if (newPayload === true) newPayload = payload;
@@ -136,14 +138,19 @@ export class Session {
 								return this.returnPayload(payload, false, null);
 							}
 							// if callback is not a function and not true return expired true
+							cache.remove(cookieName || this.sm.cookieName);
 							return this.returnPayload(payload, true, null);
 						}
 					} catch (error) {
+						cache.remove(cookieName || this.sm.cookieName);
 					}
 				}
 				// if callback is not set return expired true
+				cache.remove(cookieName || this.sm.cookieName);
 				return this.returnPayload(payload, true, null);
 			}
+			// For non-expiration errors, remove cache immediately
+			cache.remove(cookieName || this.sm.cookieName);
 			return this.returnPayload(null, false, error instanceof Error ? error.message : 'Unknown error');
 		}
 	}
