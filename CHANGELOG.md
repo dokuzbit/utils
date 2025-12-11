@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.26] - December 12, 2025
+
+### 🐛 Bug Fixes
+
+- session.server.ts bugfix for getToken method. Fixes session loose after server restart. Was deleting cache before checking validation.
+
 ## [0.2.25] - December 4, 2025
 
 ### 🐛 Bug Fixes
@@ -33,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🐛 Bug Fixes
 
 - mariadb now support colon notation in query method ie: `select data:color from json_test where data:contact.phone = ?`
-  0.2.22 bug fix which use dot notation which conflict with table alias 
+  0.2.22 bug fix which use dot notation which conflict with table alias
 
 ---
 
