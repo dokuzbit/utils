@@ -114,7 +114,7 @@ export class Session {
 			return this.returnPayload(payload, false, null);
 		} catch (error) {
 			if (error instanceof jwt.TokenExpiredError) {
-				let payload = jwt.decode(cookie) as PayloadInterface;
+				let payload = jwt.decode(cookie) as JwtPayload;
 				if (callback) {
 					try {
 						if (typeof callback === 'function') {
@@ -126,16 +126,28 @@ export class Session {
 							}
 
 							// if newPayload is true set it to the original payload
-							if (newPayload === true) newPayload = payload;
+							if (newPayload === true) {
+								// exp ve iat'i silmeden payload'ı setToken'a gönder
+								const payloadWithoutExpIat = { ...payload };
+								delete payloadWithoutExpIat.exp;
+								delete payloadWithoutExpIat.iat;
+								// setToken zaten doğru exp ve iat ile PayloadInterface döndürüyor
+								return await this.setToken(payloadWithoutExpIat);
+							}
 
-							// set the token to the new payload and return the new payload
-							await this.setToken(newPayload);
-							return this.returnPayload(newPayload, false, null);
+							// PayloadInterface döndüğünde payload property'sini al
+							const payloadData = typeof newPayload === 'object' && 'payload' in newPayload ? newPayload.payload : newPayload;
+							// setToken zaten doğru exp ve iat ile PayloadInterface döndürüyor
+							return await this.setToken(payloadData);
 						} else {
 							if (callback === true) {
 								// if callback is true always refresh the token
-								await this.setToken(payload);
-								return this.returnPayload(payload, false, null);
+								// exp ve iat'i silmeden payload'ı setToken'a gönder
+								const payloadWithoutExpIat = { ...payload };
+								delete payloadWithoutExpIat.exp;
+								delete payloadWithoutExpIat.iat;
+								// setToken zaten doğru exp ve iat ile PayloadInterface döndürüyor
+								return await this.setToken(payloadWithoutExpIat);
 							}
 							// if callback is not a function and not true return expired true
 							cache.remove(cookieName || this.sm.cookieName);
@@ -156,12 +168,11 @@ export class Session {
 	}
 
 	async updateToken(newPayload: any): Promise<PayloadInterface> {
-		const { payload } = await this.getToken();
-		const mergedPayload = mergeDeep(payload, newPayload);
-		await this.setToken(mergedPayload);
-		const remainingTime = (mergedPayload as JwtPayload).exp! - Date.now() / 1000;
-		cache.set(this.sm.cookieName, mergedPayload, remainingTime);
-		return this.returnPayload(mergedPayload, false, null);
+		const tokenResult = await this.getToken();
+		const mergedPayload = mergeDeep(tokenResult.payload, newPayload);
+		const result = await this.setToken(mergedPayload);
+		// setToken zaten cache'i güncelliyor ve doğru exp/iat ile payload döndürüyor
+		return result;
 	}
 
 	async clearToken(cookieName?: string, cookiePath?: string): Promise<boolean> {
@@ -181,9 +192,13 @@ export class Session {
 	private returnPayload(payload: any, expired: boolean = false, error: Error | null | string = null): { payload: any, expired: boolean, error: Error | null | string, exp: number, iat: number } {
 		const exp = payload?.exp;
 		const iat = payload?.iat;
-		delete payload?.exp;
-		delete payload?.iat;
-		return { payload, expired, error, exp, iat };
+		// Payload'ı mutate etmemek için kopyasını al ve exp/iat'i kopyadan sil
+		const payloadCopy = payload ? { ...payload } : payload;
+		if (payloadCopy && typeof payloadCopy === 'object') {
+			delete payloadCopy.exp;
+			delete payloadCopy.iat;
+		}
+		return { payload: payloadCopy, expired, error, exp, iat };
 	}
 }
 export const session = new Session;

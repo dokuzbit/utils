@@ -22,8 +22,6 @@ const cookies = new Cookies();
 
 session.config({ cookies: cookies, cookieName: "test_cookie" });
 
-// TODO: Testlerde hata var ikinci kez set etitğimizde exp ve iat undefined oluyor.
-
 test("session set get", async () => {
   session.setToken({ id: 1, name: "test" });
   const token = await session.getToken("");
@@ -135,4 +133,22 @@ test("updateToken", async () => {
     expired: false,
     error: null,
   });
+});
+
+test("session set token twice exp and iat should be defined", async () => {
+  const result1 = await session.setToken({ id: 1, name: "test" });
+  expect(result1.exp).toBeDefined();
+  expect(result1.iat).toBeDefined();
+  expect(typeof result1.exp).toBe("number");
+  expect(typeof result1.iat).toBe("number");
+
+  const result2 = await session.setToken({ id: 2, name: "test2" });
+  expect(result2.exp).toBeDefined();
+  expect(result2.iat).toBeDefined();
+  expect(typeof result2.exp).toBe("number");
+  expect(typeof result2.iat).toBe("number");
+
+  // İkinci token'ın exp'i ilkinden büyük olmalı (daha yeni)
+  expect(result2.exp).toBeGreaterThanOrEqual(result1.exp);
+  expect(result2.iat).toBeGreaterThanOrEqual(result1.iat);
 });
