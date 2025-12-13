@@ -2,90 +2,167 @@
  * @description formBuilder
  * @lastModified 09.10.2025
  * 
- * // TODO: Type validation should accept any validation library
+ * @param data - The data to initialize the form with.
+ * @param schema - The schema to validate the form with.
+ * @returns an object with data and fallowing getters and methods
+ * 
+ * @getter isDirty - A boolean indicating if the form is dirty
+ * @getter dirtyFields - An array of the dirty fields of the form.
+ * @getter isValid - A boolean indicating if the form is valid.
+ * @getter err - string[] of errors for each field. { field: [error1, error2, ...] }
+ * @getter canSubmit - A boolean indicating if the form can submit.
+ * 
+ * @method save() - Save the form data to initial data, clear dirty fields and errors.
+ * @method reset() - Reset the form data to initial values.
+ * @method clear() - Clear the form data setting each field empty value.
+ * @method validate() - Validate the form data against the schema and return data or false.
+ * 
+ * // TODO: Empty Object craation and validation error parsing now supports Arktype only. Will test other libraries later.
  */
 
 
-import { type } from "arktype";
+const defaults = new Map<string, any>([
+  ["string", ""],
+  ["number", 0],
+  ["bigint", BigInt(0)],
+  ["boolean", false],
+  ["null", null],
+  ["undefined", undefined],
+  ["object", {}],
+  ["array", []],
+  ["date", new Date()],
+]);
 
-export function formBuilder<T extends Record<string, any> = Record<string, any>>(data?: T, schema?: any) {
-    let arkSchema = schema ? type(schema) : null;
+class FormBuilder<T extends Record<string, any>> {
+  data: T;
+  #err: Partial<Record<keyof T, string[]>> = {};
+  #schema?: Function;
+  #initialData: T;
 
-    // Eğer data verilmemişse veya boş obje ise ve schema varsa, default obje oluştur
-    if ((!data || Object.keys(data).length === 0) && schema) data = createObject<T>(schema);
-    data = data || {} as T;
-    let initialData = { ...data };
-    return {
-        data,
-        isLoading: false,
-        allowEmptySubmit: false,
-        err: {} as Partial<Record<keyof T, string[]>>,
-        get isDirty() {
-            return JSON.stringify(this.data) !== JSON.stringify(initialData);
-        },
-        get dirtyFields() {
-            return Object.keys(this.data).filter(
-                (key) => this.data[key] !== initialData[key]
-            );
-        },
-        get canSubmit() {
-            const hasValues = Object.values(this.data).some(
-                (value) => value.toString().trim() !== ''
-            );
-            return (
-                JSON.stringify(this.data) !== JSON.stringify(initialData) &&
-                !this.isLoading &&
-                (hasValues || this.allowEmptySubmit)
-            );
-        },
-        save(newData?: T) {
-            this.isLoading = false;
-            initialData = newData ? { ...newData } : { ...this.data };
-            Object.keys(this.err).forEach((key) => delete this.err[key]);
-        },
-        reset() {
-            this.isLoading = false;
-            Object.assign(this.data, initialData);
-            Object.keys(this.err).forEach((key) => delete this.err[key]);
-        },
-        clear() {
-            this.isLoading = false;
-            Object.keys(this.data).forEach((key) => {
-                (this.data as Record<string, any>)[key] =
-                    this.data[key].constructor?.() ?? '';
-            });
-            Object.keys(this.err).forEach((key) => delete this.err[key]);
-        },
-        validate() {
-            if (!arkSchema) return null
-            const result = arkSchema(this.data);
-            if (result instanceof type.errors) {
-                result.flatMap(error => {
-                    this.err[error.path[0] as keyof T] = [error.message];
-                });
-                console.log(this.err);
-                return null
-            } else {
-                this.err = {};
-                return this.data;
-            }
+  constructor(data: T = {} as T, schema?: Function) {
+    // Eğer data boşsa şemadan oluşturmayı deneyelim
+    this.data = data ? data : (schema && typeof schema === "function") ? this.#createObject<T>(schema) : {} as T;
+    this.#initialData = { ...this.data } as T;
+    this.#schema = schema || undefined;
+  }
 
-        },
+  get isDirty() { return JSON.stringify(this.data) !== JSON.stringify(this.#initialData); }
+
+  get dirtyFields() {
+    return Object.keys(this.data).filter(
+      (key) => this.data[key as keyof T] !== this.#initialData[key as keyof T]
+    );
+  }
+
+  get isValid() { return this.validate() ? true : false; }
+
+  get err() {
+    this.validate();
+    return this.#err;
+  }
+
+  get canSubmit() {
+    const hasValues = Object.values(this.data).some(
+      (value) => value.toString().trim() !== ''
+    );
+    return (this.isDirty && this.isValid && hasValues);
+  }
+
+  save(newData?: T) {
+    if (newData) {
+      this.data = { ...newData };
+      this.#initialData = { ...newData };
+    } else {
+      this.#initialData = { ...this.data };
+    }
+    this.#err = {};
+  }
+
+  reset() {
+    Object.assign(this.data, this.#initialData);
+    this.#err = {};
+  }
+
+  clear() {
+    Object.keys(this.data).forEach((key) => {
+      this.data[key as keyof T] = defaults.get(typeof this.data[key as keyof T]) as T[keyof T];
+    });
+    this.#err = {};
+  }
+
+  validate(): T | false {
+    if (!this.#schema) return this.data;
+    if (!this.#schema && typeof this.#schema !== "function") {
+      this.#err = { generalError: ['Schema is not a function.'] } as Partial<Record<keyof T, string[]>>;
+      return false;
+    }
+
+    const result = this.#schema(this.data);
+    // Check if result is ArkErrors instance
+    if (result[' arkKind'] === 'errors') {
+      // Clear previous errors before populating new ones
+      this.#err = {};
+      Object.keys(result.flatByPath).forEach((key) => {
+        result.flatByPath[key].forEach((error: any) => {
+          this.#err[key as keyof T] = [error.message];
+        });
+      });
+      return false;
+    }
+    // Check for other libraries errors
+    if ('errors' in result || 'error' in result) {
+      // Clear previous errors before populating new ones
+      this.#err = { generalError: ['General validation error'] } as Partial<Record<keyof T, string[]>>;
+      return false;
+    }
+    // Validation succeeded - clear errors and return result
+    this.#err = {};
+    return result as T;
+  }
+
+  #createObject<T>(schema: any): T {
+    const empty = {} as T;
+    if (!schema || typeof schema !== "function" || !schema.json) return empty;
+    const jsonSchema = schema.json as any;
+
+    const getDomain = (prop: any): string => {
+      // Eğer value direkt string ise (örn: "string")
+      if (typeof prop.value === "string") {
+        return prop.value;
+      }
+
+      // Eğer value bir obje ise ve domain property'si varsa
+      if (prop.value && typeof prop.value === "object" && "domain" in prop.value) {
+        return prop.value.domain;
+      }
+
+      // Eğer value bir array ise, ilk elemanı kontrol et
+      if (Array.isArray(prop.value)) {
+        const firstItem = prop.value[0];
+        if (firstItem && typeof firstItem === "object" && "domain" in firstItem) {
+          return firstItem.domain;
+        }
+        // Array içinde unit varsa (undefined, null gibi)
+        if (firstItem && "unit" in firstItem) {
+          return firstItem.unit;
+        }
+      }
+
+      return "undefined";
     };
+
+    const required = jsonSchema.required || [];
+    const optional = jsonSchema.optional || [];
+
+    [...required, ...optional].forEach((prop: any) => {
+      const domain = getDomain(prop);
+      empty[prop.key as keyof T] = defaults.get(domain) as T[keyof T];
+    });
+
+    return empty as typeof schema.infer;
+  }
 }
 
-export default formBuilder;
-
-function createObject<T extends Record<string, any>>(schema: any) {
-    let empty = {} as T;
-    Object.keys(schema).forEach((key) => {
-        empty[key as keyof T] = (schema[key].includes("string") ? "" :
-            schema[key].includes("number") ? 0 :
-                schema[key].includes("bigint") ? BigInt(0) :
-                    schema[key].includes("boolean") ? false :
-                        schema[key].includes("null") ? null :
-                            schema[key].includes("undefined") ? undefined :
-                                undefined) as T[keyof T];
-    });
-    return empty;
+export function formBuilder<T extends Record<string, any>>(data: T = {} as T, schema?: Function) {
+  return new FormBuilder<T>(data, schema);
 }

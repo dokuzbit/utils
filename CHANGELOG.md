@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - December 13, 2025
+
+### 🔄 ☠️ Breaking Changes ☠️
+
+- client/form formBuilder now accepts standart schema function as second parameter instead of schema object
+- if schema is schema Object, isValid returns false and err object includes generalError: 'Schema is not a function.'
+- if schema is not provided, isValid returns true
+- isLoading property is removed
+- allowEmptySubmit property is removed since it's better to use validation scheme instead
+
 ## [0.2.26] - December 12, 2025
 
 ### 🐛 Bug Fixes

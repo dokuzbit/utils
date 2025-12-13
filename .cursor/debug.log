@@ -1,0 +1,28 @@
+{"location":"form.ts:131","message":"#validate called","data":{"hasSchema":true},"timestamp":1765654246648,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:135","message":"validation result","data":{"resultType":"object","isArray":false,"isInstanceofArkErrors":false,"hasFlatByPath":false},"timestamp":1765654246651,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:131","message":"#validate called","data":{"hasSchema":true},"timestamp":1765654265291,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:135","message":"validation result","data":{"resultType":"object","isArray":false,"isInstanceofArkErrors":false,"hasFlatByPath":false},"timestamp":1765654265294,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:151","message":"validation success - clearing errors and returning result","data":{"errKeysBeforeClear":0},"timestamp":1765654265294,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"D"}
+{"location":"form.ts:153","message":"validation success - errors cleared","data":{"errKeysAfterClear":0},"timestamp":1765654265294,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"D"}
+{"location":"form.ts:135","message":"validation result","data":{"resultType":"object","isArray":true,"isInstanceofArkErrors":true,"hasFlatByPath":true},"timestamp":1765654265296,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:131","message":"#validate called","data":{"hasSchema":true},"timestamp":1765654265295,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:135","message":"validation result","data":{"resultType":"object","isArray":false,"isInstanceofArkErrors":false,"hasFlatByPath":false},"timestamp":1765654265295,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:151","message":"validation success - clearing errors and returning result","data":{"errKeysBeforeClear":0},"timestamp":1765654265295,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"D"}
+{"location":"form.ts:153","message":"validation success - errors cleared","data":{"errKeysAfterClear":0},"timestamp":1765654265295,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"D"}
+{"location":"form.ts:73","message":"reset method called","data":{},"timestamp":1765654265295,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"A"}
+{"location":"form.ts:75","message":"before clearing #err in reset","data":{"errKeysBefore":0},"timestamp":1765654265295,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"A"}
+{"location":"form.ts:77","message":"after clearing #err in reset","data":{"errKeysAfter":0},"timestamp":1765654265295,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"A"}
+{"location":"form.ts:131","message":"#validate called","data":{"hasSchema":true},"timestamp":1765654265295,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:139","message":"validation errors detected (ArkErrors)","data":{"flatByPathKeys":1},"timestamp":1765654265296,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:147","message":"#validate returning false (errors found)","data":{"errKeys":1},"timestamp":1765654265296,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:131","message":"#validate called","data":{"hasSchema":true},"timestamp":1765654265297,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:135","message":"validation result","data":{"resultType":"object","isArray":false,"isInstanceofArkErrors":false,"hasFlatByPath":false},"timestamp":1765654265297,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:151","message":"validation success - clearing errors and returning result","data":{"errKeysBeforeClear":0},"timestamp":1765654265297,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"D"}
+{"location":"form.ts:153","message":"validation success - errors cleared","data":{"errKeysAfterClear":0},"timestamp":1765654265297,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"D"}
+{"location":"form.ts:131","message":"#validate called","data":{"hasSchema":true},"timestamp":1765654265297,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:131","message":"#validate called","data":{"hasSchema":true},"timestamp":1765654265297,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:135","message":"validation result","data":{"resultType":"object","isArray":false,"isInstanceofArkErrors":false,"hasFlatByPath":false},"timestamp":1765654265297,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
+{"location":"form.ts:151","message":"validation success - clearing errors and returning result","data":{"errKeysBeforeClear":0},"timestamp":1765654265297,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"D"}
+{"location":"form.ts:153","message":"validation success - errors cleared","data":{"errKeysAfterClear":0},"timestamp":1765654265297,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"D"}
+{"location":"form.ts:59","message":"err getter accessed","data":{"errKeys":0},"timestamp":1765654265297,"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}
+{"location":"form.ts:131","message":"#validate called","data":{"hasSchema":true},"timestamp":1765654265297,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"C"}
