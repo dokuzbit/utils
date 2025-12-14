@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import { formBuilder } from "../../client/form";
+import { FormBuilder, formBuilder } from "../../client/form";
 import { type } from "arktype";
 
 const filledData = {
@@ -24,6 +24,49 @@ const schema = type({
     "lastName?": "string > 2",
     email: "string.email | undefined | ''?",
     age: "number.integer >= 18",
+});
+
+describe("formBuilder - generate & genmerge option", () => {
+    test("generate: none", () => {
+        const form = new FormBuilder<typeof schema.infer>(undefined, schema, { generate: 'none' });
+        expect(form.data).toBeDefined();
+        expect(form.data.name).toBeUndefined();
+        expect(form.data.lastName).toBeUndefined();
+        expect(form.data.email).toBeUndefined();
+        expect(form.data.age).toBeUndefined();
+    });
+    test("generate: required", () => {
+        const form = new FormBuilder<typeof schema.infer>(undefined, schema, { generate: 'required' });
+        expect(form.data).toBeDefined();
+        expect(form.data.name).toBe("");
+        expect(form.data.lastName).toBeUndefined();
+        expect(form.data.email).toBeUndefined();
+        expect(form.data.age).toBe(0);
+    });
+    test("generate: all", () => {
+        const form = new FormBuilder<typeof schema.infer>(undefined, schema, { generate: 'all' });
+        expect(form.data).toBeDefined();
+        expect(form.data.name).toBe("");
+        expect(form.data.lastName).toBe("");
+        expect(form.data.email).toBe("");
+        expect(form.data.age).toBe(0);
+    });
+    test("genmerge: true", () => {
+        const form = new FormBuilder<typeof schema.infer & { city: string }>({ city: "New York" } as any, schema, { generate: 'all', genmerge: true });
+        expect(form.data).toBeDefined();
+        expect(form.data.city).toBe("New York");
+        expect(form.data.name).toBe("");
+        expect(form.data.lastName).toBeDefined();
+        expect(form.data.email).toBeDefined();
+        expect(form.data.age).toBe(0);
+    });
+    test("genmerge: false", () => {
+        const form = new FormBuilder<typeof schema.infer & { city: string }>({ city: "New York" } as any, schema, { generate: 'required', genmerge: false });
+        expect(form.data).toBeDefined();
+        expect(form.data.city).toBe("New York");
+        expect(form.data.name).toBeUndefined();
+        expect(form.data.age).toBeUndefined();
+    });
 });
 
 describe("formBuilder - isDirty getter", () => {

@@ -4,7 +4,11 @@
  * 
  * @param data - The data to initialize the form with.
  * @param schema - The schema to validate the form with.
+ * @param options - The options to configure the form.
  * @returns an object with data and fallowing getters and methods
+ * 
+ * @option generate - Generate return object from schema. none | required | all (default: required)
+ * @option genmerge - Merge generated object with data (default: false)
  * 
  * @getter isDirty - A boolean indicating if the form is dirty
  * @getter dirtyFields - An array of the dirty fields of the form.
@@ -20,6 +24,10 @@
  * // TODO: Empty Object craation and validation error parsing now supports Arktype only. Will test other libraries later.
  */
 
+type Options = {
+  generate?: 'none' | 'required' | 'all';
+  genmerge?: boolean;
+}
 
 const defaults = new Map<string, any>([
   ["string", ""],
@@ -33,17 +41,26 @@ const defaults = new Map<string, any>([
   ["date", new Date()],
 ]);
 
-class FormBuilder<T extends Record<string, any>> {
+
+export class FormBuilder<T extends Record<string, any>> {
   data: T;
   #err: Partial<Record<keyof T, string[]>> = {};
   #schema?: Function;
   #initialData: T;
+  options?: Options;
 
-  constructor(data: T = {} as T, schema?: Function) {
+  constructor(data?: T, schema?: Function, options?: Options) {
     // Eğer data boşsa şemadan oluşturmayı deneyelim
-    this.data = data ? data : (schema && typeof schema === "function") ? this.#createObject<T>(schema) : {} as T;
-    this.#initialData = { ...this.data } as T;
+    this.options = options || {};
     this.#schema = schema || undefined;
+    const generatedData = schema && typeof schema === "function" ? this.#createObject<T>(schema) : {}
+    if (this.options?.genmerge) {
+      this.data = { ...data, ...generatedData } as T;
+    } else {
+      this.data = data ? data : generatedData as T;
+    }
+    // this.data = data ? data : (schema && typeof schema === "function") ? this.#createObject<T>(schema) : {} as T;
+    this.#initialData = { ...this.data } as T;
   }
 
   get isDirty() { return JSON.stringify(this.data) !== JSON.stringify(this.#initialData); }
@@ -122,6 +139,7 @@ class FormBuilder<T extends Record<string, any>> {
 
   #createObject<T>(schema: any): T {
     const empty = {} as T;
+    if (this.options?.generate === 'none') return empty;
     if (!schema || typeof schema !== "function" || !schema.json) return empty;
     const jsonSchema = schema.json as any;
 
@@ -152,17 +170,16 @@ class FormBuilder<T extends Record<string, any>> {
     };
 
     const required = jsonSchema.required || [];
-    const optional = jsonSchema.optional || [];
+    const optional = this.options?.generate === 'all' ? jsonSchema.optional || [] : [];
 
     [...required, ...optional].forEach((prop: any) => {
       const domain = getDomain(prop);
       empty[prop.key as keyof T] = defaults.get(domain) as T[keyof T];
     });
-
     return empty as typeof schema.infer;
   }
 }
 
-export function formBuilder<T extends Record<string, any>>(data: T = {} as T, schema?: Function) {
-  return new FormBuilder<T>(data, schema);
+export function formBuilder<T extends Record<string, any>>(data?: T, schema?: Function, options?: Options) {
+  return new FormBuilder<T>(data, schema, options);
 }

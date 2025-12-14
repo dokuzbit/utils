@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.1] - December 14, 2025
+
+### 🔄 Changed
+
+- client/form formBuilder now accepts genmerge option to merge shcheme generated object with passed data
+- client/form formBuilder now accepts generate option to generate object from schema. none | required | all (default: required)
+
 ## [0.3.0] - December 13, 2025
 
 ### 🔄 ☠️ Breaking Changes ☠️
