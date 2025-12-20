@@ -1,6 +1,10 @@
 import jwt, { type JwtPayload, type Secret, type SignOptions } from 'jsonwebtoken';
 import { cache } from './cache.server';
 
+const debug = true
+
+// #region Interfaces
+
 interface Cookies {
 	set: (name: string, value: string, options: CookiesOptions) => void,
 	get: (name: string) => string | null,
@@ -33,15 +37,17 @@ interface PayloadInterface {
 	iat: number;
 }
 
+// #endregion Interfaces
+
 export class Session {
 	private sm: SessionConfig = {
 		cookies: null,
 		cookieName: 'session_cookie',
 		secret: process.env.JWT_SECRET || 'secret',
-		expiresIn: process.env.NODE_ENV === 'debug' ? '1m' : '15m',
+		expiresIn: debug ? '3s' : '15m',
 		path: '/',
 		httpOnly: true,
-		secure: process.env.NODE_ENV === 'production',
+		secure: true,
 		maxAge: 365 * 24 * 60 * 60 * 1000
 	};
 

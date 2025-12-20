@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test, describe } from "bun:test";
 import session from "../../server/session.server";
 
 class Cookies {
@@ -20,7 +20,46 @@ class Cookies {
 
 const cookies = new Cookies();
 
-session.config({ cookies: cookies, cookieName: "test_cookie" });
+session.config({
+  cookies: cookies,
+  cookieName: "test_cookie",
+  expiresIn: "1s",
+});
+
+describe("callback tests", () => {
+  test("callback true", async () => {
+    await session.setToken({ id: 1, name: "test" });
+    await Bun.sleep(1500);
+    const token = await session.getToken("", () => Promise.resolve(true));
+    expect(token).toMatchObject({
+      payload: { id: 1, name: "test" },
+      expired: false,
+      error: null,
+    });
+  });
+
+  test("callback false", async () => {
+    await session.setToken({ id: 1, name: "test" });
+    await Bun.sleep(1500);
+    const token = await session.getToken("", false);
+    expect(token).toMatchObject({
+      payload: { id: 1, name: "test" },
+      expired: true,
+      error: null,
+    });
+  });
+
+  test("callback none", async () => {
+    await session.setToken({ id: 1, name: "test" });
+    await Bun.sleep(1500);
+    const token = await session.getToken("");
+    expect(token).toMatchObject({
+      payload: { id: 1, name: "test" },
+      expired: true,
+      error: null,
+    });
+  });
+});
 
 test("session set get", async () => {
   session.setToken({ id: 1, name: "test" });
