@@ -1,8 +1,6 @@
 import jwt, { type JwtPayload, type Secret, type SignOptions } from 'jsonwebtoken';
 import { cache } from './cache.server';
 
-const debug = true
-
 // #region Interfaces
 
 interface Cookies {
@@ -44,7 +42,7 @@ export class Session {
 		cookies: null,
 		cookieName: 'session_cookie',
 		secret: process.env.JWT_SECRET || 'secret',
-		expiresIn: debug ? '3s' : '15m',
+		expiresIn: '15m',
 		path: '/',
 		httpOnly: true,
 		secure: true,
@@ -96,7 +94,7 @@ export class Session {
 		// Yeni token'ı direkt decode et, cookie'den okuma
 		const decoded = jwt.decode(token) as JwtPayload;
 		const remainingTime = decoded.exp! - Date.now() / 1000;
-		cache.set(options?.cookieName || this.sm.cookieName, data, remainingTime);
+		// cache.set(options?.cookieName || this.sm.cookieName, data, remainingTime);
 		return this.returnPayload({ ...data, exp: decoded.exp, iat: decoded.iat }, false, null);
 	}
 
@@ -116,11 +114,17 @@ export class Session {
 		try {
 			const payload = jwt.verify(cookie, this.sm.secret);
 			const remainingTime = (payload as JwtPayload).exp! - Date.now() / 1000;
-			cache.set(cookieName || this.sm.cookieName, payload, remainingTime);
+			// cache.set(cookieName || this.sm.cookieName, payload, remainingTime);
 			return this.returnPayload(payload, false, null);
 		} catch (error) {
 			if (error instanceof jwt.TokenExpiredError) {
+				console.log("debug: TokenExpiredError");
 				let payload = jwt.decode(cookie) as JwtPayload;
+				if (!payload) {
+					console.log("debug: L124 remove cookie from cache");
+					cache.remove(cookieName || this.sm.cookieName);
+					return this.returnPayload(null, true, 'Token is invalid');
+				}
 				if (callback) {
 					try {
 						if (typeof callback === 'function') {
@@ -160,14 +164,18 @@ export class Session {
 							return this.returnPayload(payload, true, null);
 						}
 					} catch (error) {
+						console.log("debug: L162 remove cookie from cache");
 						cache.remove(cookieName || this.sm.cookieName);
+						return this.returnPayload(payload, true, error instanceof Error ? error.message : 'Unknown error');
 					}
 				}
 				// if callback is not set return expired true
+				console.log("debug: L166 remove cookie from cache");
 				cache.remove(cookieName || this.sm.cookieName);
 				return this.returnPayload(payload, true, null);
 			}
 			// For non-expiration errors, remove cache immediately
+			console.log("debug: L160 remove cookie from cache");
 			cache.remove(cookieName || this.sm.cookieName);
 			return this.returnPayload(null, false, error instanceof Error ? error.message : 'Unknown error');
 		}
