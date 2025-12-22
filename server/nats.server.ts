@@ -121,7 +121,6 @@ export class NatsWrapper {
 		if (this.nc) {
 			await this.nc.close();
 			this.nc = null;
-			console.log('NATS bağlantısı kapatıldı');
 		}
 	}
 }

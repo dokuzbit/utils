@@ -109,7 +109,6 @@ export class Cache<T> {
         const valueSize = this.calculateSize(value);
 
         if (valueSize > this.maxItemSize) {
-            console.log("Max item size exceeded");
             return;
         }
 
@@ -203,7 +202,6 @@ export class Cache<T> {
                 this.currentSize -= node.value.size;
                 this.removeNode(node);
                 this.cache.delete(key);
-                console.log('🗑️ src/lib/server/cache.ts 👉 106 👀 expired ➤ ', key);
             }
         }
     }
@@ -215,7 +213,6 @@ export class Cache<T> {
             this.currentSize -= tail.value.size;
             this.removeNode(tail);
             this.cache.delete(tail.key);
-            console.log('🗑️ src/lib/server/cache.ts 👉 110 👀 removed ➤ ', tail.key);
         }
     }
 

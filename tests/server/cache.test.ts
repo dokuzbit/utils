@@ -4,7 +4,6 @@ import { sleep } from 'bun';
 
 test("cache", async () => {
     cache.set('test', 'test', 10);
-    console.log(cache.getMeta('test'));
     expect(cache.get('test')).toBe('test');
     expect(cache.getMeta('test')).toBeDefined();
     expect(cache.getSize()).toBeGreaterThan(0);

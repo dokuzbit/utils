@@ -44,7 +44,6 @@ export class NatsWrapper {
 	}
 
 	private async connect(): Promise<void> {
-		console.log('Client NATS bağlantısı kuruluyor...');
 		try {
 			if (!this.nc) {
 				const connectOptions: any = {
@@ -124,7 +123,6 @@ export class NatsWrapper {
 		if (this.nc) {
 			await this.nc.close();
 			this.nc = null;
-			console.log('NATS bağlantısı kapatıldı');
 		}
 	}
 }

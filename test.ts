@@ -69,7 +69,6 @@ const hashMap = new Map();
 testWords.forEach(word => {
     const hash = shortName(word);
     if (hashMap.has(hash)) {
-        console.log(`ÇAKIŞMA BULUNDU! ${word} ve ${hashMap.get(hash)} -> ${hash}`);
     } else {
         hashMap.set(hash, word);
     }

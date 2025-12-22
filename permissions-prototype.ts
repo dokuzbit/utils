@@ -184,5 +184,3 @@ function checkPermission(user, permission) {
   });
 }
 
-console.log(getUserPermissions(users.get("tuğba")));
-console.log(checkPermission(users.get("tuğba"), "bayi:create"));

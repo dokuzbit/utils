@@ -151,7 +151,6 @@ describe('MariaDB Utilities Tests', () => {
     test('batch', async () => {
         await db.execute('use test')
         const result = await db.insert(TABLE1, [{ name: 'test2', data: { color: 'white', size: 'M' } }, { name: 'test3', data: { color: 'black', size: 'L' } }]);
-        console.log(result);
         expect(result).toBeDefined();
         expect(result.affectedRows).toBe(2);
         expect(result).not.toHaveProperty('error');
@@ -296,7 +295,6 @@ describe('MariaDB Utilities Tests', () => {
             whereParams: ['not değeri', 'order değeri']
         });
 
-        console.log('whereResult:', whereResult);
 
         // whereResult bir dizi değil, tek bir obje olduğundan length kontrolü yerine objenin kendisini kontrol edelim
         expect(whereResult).toBeDefined();
@@ -396,7 +394,6 @@ describe('MariaDB Utilities Tests', () => {
 
     test('query with error column name', async () => {
         const result = await db.query('SELECT 1 as error, name FROM json_test limit 1');
-        console.log("result", result);
         expect(result).toBeDefined();
         expect(result).toBeArray();
     });

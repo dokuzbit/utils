@@ -107,14 +107,12 @@ export class Cache<T> {
             expireDate = new Date(expireDate).toISOString();
         }
 
-
         this.removeExpired();
         this.removeUntilFreeSpace();
 
         const valueSize = this.calculateSize(value);
 
         if (valueSize > this.maxItemSize) {
-            console.log("Max item size exceeded");
             return;
         }
 
@@ -146,7 +144,6 @@ export class Cache<T> {
         if (!node && cacheDB) {
             const dbNode: any = cacheDB.prepare("SELECT value, expireDate FROM cache WHERE key = ? AND datetime(expireDate) > datetime('now')").get(key);
             if (dbNode) {
-                console.log("found on db")
                 const newNode = new CacheNode<T>(key, {
                     value: JSON.parse(dbNode.value),
                     size: this.calculateSize(JSON.parse(dbNode.value)),
@@ -209,7 +206,6 @@ export class Cache<T> {
                 this.currentSize -= node.value.size;
                 this.removeNode(node);
                 this.cache.delete(key);
-                console.log('🗑️ src/lib/server/cache.ts 👉 154 👀 expired ➤ ', key);
             }
         }
         // Veritamanında expireDate'i geçmiş verileri sil.
@@ -223,7 +219,6 @@ export class Cache<T> {
             this.currentSize -= tail.value.size;
             this.removeNode(tail);
             this.cache.delete(tail.key);
-            console.log('🗑️ src/lib/server/cache.ts 👉 110 👀 removed ➤ ', tail.key);
         }
     }
 

@@ -71,6 +71,8 @@ export class Session {
 	 * @param options.maxAge - The maximum age of the cookie.
 	 * @returns A promise that resolves to a boolean indicating the success of the operation.
 	 */
+
+
 	async setToken(data: any, options: { cookieName?: string, expiresIn?: string, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number } = {}): Promise<PayloadInterface> {
 		this.checkConfig();
 		delete data?.exp;
@@ -87,14 +89,9 @@ export class Session {
 			maxAge: options?.maxAge || this.sm.maxAge
 		});
 
-		// ESKİ KOD (HATALI):
-		// const newToken = await this.getToken(...);  ← cookies.get() eski cookie döndürüyor!
-
-		// YENİ KOD (DOĞRU):
-		// Yeni token'ı direkt decode et, cookie'den okuma
 		const decoded = jwt.decode(token) as JwtPayload;
 		const remainingTime = decoded.exp! - Date.now() / 1000;
-		// cache.set(options?.cookieName || this.sm.cookieName, data, remainingTime);
+		cache.set(options?.cookieName || this.sm.cookieName, data, remainingTime);
 		return this.returnPayload({ ...data, exp: decoded.exp, iat: decoded.iat }, false, null);
 	}
 
@@ -106,31 +103,33 @@ export class Session {
 	 */
 	async getToken(cookieName?: string, callback?: ((payload: any) => Promise<PayloadInterface | boolean>) | boolean, nocache = false): Promise<PayloadInterface> {
 		// Check if the token is cached, return the cached payload
-		// const cachedPayload = cache.get(cookieName || this.sm.cookieName)
-		// if (cachedPayload && !nocache) return this.returnPayload(cachedPayload, false, null);
+		const cachedPayload = cache.get(cookieName || this.sm.cookieName)
+		if (cachedPayload && !nocache) return this.returnPayload(cachedPayload, false, null);
 		this.checkConfig();
 		const cookie = this.sm.cookies?.get(cookieName || this.sm.cookieName);
 		if (!cookie) return this.returnPayload(null, false, 'Cookie not found');
 		try {
 			const payload = jwt.verify(cookie, this.sm.secret);
 			const remainingTime = (payload as JwtPayload).exp! - Date.now() / 1000;
-			// cache.set(cookieName || this.sm.cookieName, payload, remainingTime);
+			cache.set(cookieName || this.sm.cookieName, payload, remainingTime);
 			return this.returnPayload(payload, false, null);
 		} catch (error) {
 			if (error instanceof jwt.TokenExpiredError) {
-				console.log("debug: TokenExpiredError");
 				let payload = jwt.decode(cookie) as JwtPayload;
 				if (!payload) {
-					console.log("debug: L124 remove cookie from cache");
 					cache.remove(cookieName || this.sm.cookieName);
+					console.error("👉 ➤ session.server.ts:123 ➤ Session ➤ getToken ➤ remove:", "No payload found");
 					return this.returnPayload(null, true, 'Token is invalid');
 				}
+
 				if (callback) {
 					try {
+						// #region Callback IS A Function
 						if (typeof callback === 'function') {
 							let newPayload = await callback(payload);
 							// if newPayload is false null or undefined return expired true
 							if (!newPayload) {
+								console.error("👉 ➤ session.server.ts:134 ➤ Session ➤ getToken ➤ newPayload BOŞ:", newPayload);
 								cache.remove(cookieName || this.sm.cookieName);
 								return this.returnPayload(payload, true, null);
 							}
@@ -149,34 +148,31 @@ export class Session {
 							const payloadData = typeof newPayload === 'object' && 'payload' in newPayload ? newPayload.payload : newPayload;
 							// setToken zaten doğru exp ve iat ile PayloadInterface döndürüyor
 							return await this.setToken(payloadData);
+							// #endregion Callback IS A Function
+							// #region Callback is NOT A Function
 						} else {
 							if (callback === true) {
-								// if callback is true always refresh the token
-								// exp ve iat'i silmeden payload'ı setToken'a gönder
-								const payloadWithoutExpIat = { ...payload };
-								delete payloadWithoutExpIat.exp;
-								delete payloadWithoutExpIat.iat;
-								// setToken zaten doğru exp ve iat ile PayloadInterface döndürüyor
-								return await this.setToken(payloadWithoutExpIat);
+								return await this.setToken(payload);
 							}
 							// if callback is not a function and not true return expired true
 							cache.remove(cookieName || this.sm.cookieName);
+							console.error("👉 ➤ session.server.ts:163 ➤ Session ➤ getToken ➤ CALLBACK IS NOT A FUNCTION:", callback);
 							return this.returnPayload(payload, true, null);
 						}
+						// #endregion Callback IS NOT A Function
 					} catch (error) {
-						console.log("debug: L162 remove cookie from cache");
 						cache.remove(cookieName || this.sm.cookieName);
 						return this.returnPayload(payload, true, error instanceof Error ? error.message : 'Unknown error');
 					}
 				}
-				// if callback is not set return expired true
-				console.log("debug: L166 remove cookie from cache");
+				// Callback not set
 				cache.remove(cookieName || this.sm.cookieName);
+				console.error("👉 ➤ session.server.ts:174 ➤ Session ➤ getToken ➤ CALLBACK IS NOT SET");
 				return this.returnPayload(payload, true, null);
 			}
-			// For non-expiration errors, remove cache immediately
-			console.log("debug: L160 remove cookie from cache");
+			// NOT A JWT Expired Error, remove cache immediately
 			cache.remove(cookieName || this.sm.cookieName);
+			console.error("👉 ➤ session.server.ts:179 ➤ Session ➤ getToken ➤ NON JWT EXP ERROR:", error);
 			return this.returnPayload(null, false, error instanceof Error ? error.message : 'Unknown error');
 		}
 	}

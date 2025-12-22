@@ -18,7 +18,6 @@ describe('api', () => {
     test('api GET with params', async () => {
         api.setBaseUrl('https://jsonplaceholder.typicode.com/');
         const getResult = await api.get('comments', { postId: '1' });
-        console.log(getResult);
         expect(getResult.data).toBeObject();
         expect(getResult.error).toBeNull();
         const getResult2 = await api.get('comments', 'postId=1');
@@ -29,7 +28,6 @@ describe('api', () => {
     test('api GET Error', async () => {
         api.setBaseUrl('https://jsonplaceholder.typicode.com/');
         const getResult = await api.get('postsError/1');
-        console.log(getResult);
 
         expect(getResult.data).toBeNull();
         expect(getResult.error).toBeDefined();
@@ -61,7 +59,6 @@ describe('api', () => {
         const patchResult = await api.patch('posts/2', {
             title: 'Test'
         });
-        console.log(patchResult);
         expect(patchResult.data).toBeObject();
         expect(patchResult.error).toBeNull();
     });
@@ -69,7 +66,6 @@ describe('api', () => {
     test('api DELETE', async () => {
         api.setBaseUrl('https://jsonplaceholder.typicode.com/');
         const deleteResult = await api.delete('posts/2');
-        console.log(deleteResult);
         expect(deleteResult.data).toBeObject();
         expect(deleteResult.error).toBeNull();
     });

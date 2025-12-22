@@ -41,7 +41,6 @@ const permissions = [
 
 test("Can rolünün izinleri doğru mu?", () => {
     const permissions = acl.buildShortList(user, roles);
-    console.log(permissions);
     expect(acl.checkPermission(permissions, "muhasebe")).toBe(true);
     expect(acl.checkPermission(permissions, "satis:read:otomasyon2")).toBe(false);
     expect(acl.checkPermission(permissions, "satis:read")).toBe(false);
