@@ -51,6 +51,11 @@ export class Session {
 
 	constructor() { }
 
+	private cacheKey(cookieName?: string, cookieValue?: string): string {
+		const name = cookieName || this.sm.cookieName;
+		return cookieValue ? `${name}:${cookieValue}` : name;
+	}
+
 	config(config: { cookies?: any, cookieName?: string, secret?: string, expiresIn?: string | number, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number }): void {
 		this.sm = { ...this.sm, ...config };
 	}
@@ -82,6 +87,7 @@ export class Session {
 			this.sm.secret as Secret,
 			{ expiresIn: options?.expiresIn || this.sm.expiresIn } as SignOptions
 		);
+		const cookieName = options?.cookieName || this.sm.cookieName;
 		this.sm.cookies?.set(options?.cookieName || this.sm.cookieName, token, {
 			path: options?.path || this.sm.path,
 			httpOnly: options?.httpOnly || this.sm.httpOnly,
@@ -91,7 +97,7 @@ export class Session {
 
 		const decoded = jwt.decode(token) as JwtPayload;
 		const remainingTime = decoded.exp! - Date.now() / 1000;
-		cache.set(options?.cookieName || this.sm.cookieName, data, remainingTime);
+		cache.set(this.cacheKey(cookieName, token), data, remainingTime);
 		return this.returnPayload({ ...data, exp: decoded.exp, iat: decoded.iat }, false, null);
 	}
 
@@ -102,22 +108,24 @@ export class Session {
 	 * @returns A promise that resolves to an object containing the payload, expired status, and error.
 	 */
 	async getToken(cookieName?: string, callback?: ((payload: any) => Promise<PayloadInterface | boolean>) | boolean, nocache = false): Promise<PayloadInterface> {
-		// Check if the token is cached, return the cached payload
-		const cachedPayload = cache.get(cookieName || this.sm.cookieName)
-		if (cachedPayload && !nocache) return this.returnPayload(cachedPayload, false, null);
 		this.checkConfig();
-		const cookie = this.sm.cookies?.get(cookieName || this.sm.cookieName);
+		const resolvedCookieName = cookieName || this.sm.cookieName;
+		const cookie = this.sm.cookies?.get(resolvedCookieName);
 		if (!cookie) return this.returnPayload(null, false, 'Cookie not found');
+		const cacheKey = this.cacheKey(resolvedCookieName, cookie);
+		// Check if the token is cached, return the cached payload
+		const cachedPayload = cache.get(cacheKey);
+		if (cachedPayload && !nocache) return this.returnPayload(cachedPayload, false, null);
 		try {
 			const payload = jwt.verify(cookie, this.sm.secret);
 			const remainingTime = (payload as JwtPayload).exp! - Date.now() / 1000;
-			cache.set(cookieName || this.sm.cookieName, payload, remainingTime);
+			cache.set(cacheKey, payload, remainingTime);
 			return this.returnPayload(payload, false, null);
 		} catch (error) {
 			if (error instanceof jwt.TokenExpiredError) {
 				let payload = jwt.decode(cookie) as JwtPayload;
 				if (!payload) {
-					cache.remove(cookieName || this.sm.cookieName);
+					cache.remove(cacheKey);
 					console.error("👉 ➤ session.server.ts:123 ➤ Session ➤ getToken ➤ remove:", "No payload found");
 					return this.returnPayload(null, true, 'Token is invalid');
 				}
@@ -130,7 +138,7 @@ export class Session {
 							// if newPayload is false null or undefined return expired true
 							if (!newPayload) {
 								console.error("👉 ➤ session.server.ts:134 ➤ Session ➤ getToken ➤ newPayload BOŞ:", newPayload);
-								cache.remove(cookieName || this.sm.cookieName);
+								cache.remove(cacheKey);
 								return this.returnPayload(payload, true, null);
 							}
 
@@ -155,23 +163,23 @@ export class Session {
 								return await this.setToken(payload);
 							}
 							// if callback is not a function and not true return expired true
-							cache.remove(cookieName || this.sm.cookieName);
+							cache.remove(cacheKey);
 							console.error("👉 ➤ session.server.ts:163 ➤ Session ➤ getToken ➤ CALLBACK IS NOT A FUNCTION:", callback);
 							return this.returnPayload(payload, true, null);
 						}
 						// #endregion Callback IS NOT A Function
 					} catch (error) {
-						cache.remove(cookieName || this.sm.cookieName);
+						cache.remove(cacheKey);
 						return this.returnPayload(payload, true, error instanceof Error ? error.message : 'Unknown error');
 					}
 				}
 				// Callback not set
-				cache.remove(cookieName || this.sm.cookieName);
+				cache.remove(cacheKey);
 				console.error("👉 ➤ session.server.ts:174 ➤ Session ➤ getToken ➤ CALLBACK IS NOT SET");
 				return this.returnPayload(payload, true, null);
 			}
 			// NOT A JWT Expired Error, remove cache immediately
-			cache.remove(cookieName || this.sm.cookieName);
+			cache.remove(cacheKey);
 			console.error("👉 ➤ session.server.ts:179 ➤ Session ➤ getToken ➤ NON JWT EXP ERROR:", error);
 			return this.returnPayload(null, false, error instanceof Error ? error.message : 'Unknown error');
 		}
@@ -187,15 +195,19 @@ export class Session {
 
 	async clearToken(cookieName?: string, cookiePath?: string): Promise<boolean> {
 		this.checkConfig();
+		const resolvedCookieName = cookieName || this.sm.cookieName;
+		const cookie = this.sm.cookies?.get(resolvedCookieName);
+		if (cookie) cache.remove(this.cacheKey(resolvedCookieName, cookie));
 		await this.setToken({}, { cookieName: cookieName || this.sm.cookieName, path: cookiePath || this.sm.path });
-		cache.remove(cookieName || this.sm.cookieName);
 		return true;
 	}
 
 	async deleteToken(cookieName?: string, cookiePath?: string): Promise<boolean> {
 		this.checkConfig();
+		const resolvedCookieName = cookieName || this.sm.cookieName;
+		const cookie = this.sm.cookies?.get(resolvedCookieName);
+		if (cookie) cache.remove(this.cacheKey(resolvedCookieName, cookie));
 		this.sm.cookies?.delete(cookieName || this.sm.cookieName, { path: cookiePath || this.sm.path });
-		cache.remove(cookieName || this.sm.cookieName);
 		return true;
 	}
 

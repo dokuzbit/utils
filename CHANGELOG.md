@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.2] - December 15, 2025
+
+### 🐛 Bug Fixes // !!! Security Vulnerability !!! /s
+
+- Fixed a bug where the session cache was keyed only by cookie name, causing users on different devices to share sessions. The cache now keys by cookie name + cookie value.
+
 ## [0.3.1] - December 14, 2025
 
 ### 🔄 Changed

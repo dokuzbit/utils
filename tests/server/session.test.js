@@ -39,6 +39,7 @@ describe("callback tests", () => {
   });
 
   test("callback false", async () => {
+    ""
     await session.setToken({ id: 1, name: "test" });
     await Bun.sleep(1500);
     const token = await session.getToken("", false);
