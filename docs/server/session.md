@@ -11,6 +11,33 @@ import sessionManager from "@dokuzbit/utils/server/session";
 // ☝️ We export the singleton instance as default for easy aliasing
 ```
 
+### hooks.server.ts - Global session setup (Safe way)
+
+To avoid session mixing in concurrent requests, use the `session.handle()` middleware. This ensures that each request has its own isolated session context even when using the singleton instance.
+
+```ts
+import { session } from "@dokuzbit/utils/server";
+
+export const handle = session.handle({
+  secret: process.env.JWT_SECRET,
+  expiresIn: "30m",
+});
+
+// Or if you have other handles:
+// export const handle = sequence(session.handle(), ...);
+```
+
+### session.run(config, callback) - Scoped execution
+
+If you need to run a block of code with a specific session configuration (useful in tests or background jobs):
+
+```ts
+await session.run({ cookies: myMockCookies }, async () => {
+  const result = await session.getToken();
+  // ...
+});
+```
+
 ## .config(options) - Configure session settings
 
 - options: `object` - The configuration object for the session settings.
@@ -22,20 +49,9 @@ import sessionManager from "@dokuzbit/utils/server/session";
   - httpOnly?: `boolean` - HTTP only cookie flag (default: true)
   - secure?: `boolean` - Secure cookie flag (default: true in production)
   - maxAge?: `number` - Cookie max age in milliseconds (default: 365 days)
+- returns: `Session` - Returns the session instance for chaining.
 
-```ts
-// In SvelteKit hooks.server.ts or load function
-const options = {
-  cookies: event.cookies, // SvelteKit cookies object
-  cookieName: "my_session",
-  secret: process.env.JWT_SECRET,
-  expiresIn: "30m", // 30 minutes
-  httpOnly: true,
-  secure: true,
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-};
-session.config(options);
-```
+> **Warning**: When using the singleton `session` instance, calling `.config()` outside of a `session.handle()` or `session.run()` context can lead to race conditions in concurrent environments. Always prefer using the `handle()` middleware in SvelteKit.
 
 ## .setToken(data, options?) - Create and store session token
 
@@ -151,22 +167,23 @@ interface PayloadInterface {
 ```ts
 import { session } from "@dokuzbit/utils/server";
 
+// Using the handle helper is the safest way to avoid session mixing
+export const handle = session.handle({
+  secret: process.env.JWT_SECRET,
+  expiresIn: "30m",
+});
+
+// If you need to access session data in the handle itself:
+/*
 export async function handle({ event, resolve }) {
-  // Configure session for each request
-  session.config({
-    cookies: event.cookies,
-    secret: process.env.JWT_SECRET,
-    expiresIn: "30m",
+  return session.run({ cookies: event.cookies }, async () => {
+    // Auto-refresh expired tokens
+    const result = await session.getToken(undefined, true);
+    event.locals.user = result.expired || result.error ? null : result.payload;
+    return resolve(event);
   });
-
-  // Auto-refresh expired tokens
-  const result = await session.getToken(undefined, true);
-
-  // Make user available to all routes
-  event.locals.user = result.expired || result.error ? null : result.payload;
-
-  return resolve(event);
 }
+*/
 ```
 
 ### +page.server.ts - Login endpoint
