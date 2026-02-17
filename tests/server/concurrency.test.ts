@@ -2,16 +2,18 @@ import { expect, test, describe } from "bun:test";
 import session from "../../server/session.server";
 
 class MockCookies {
-    constructor(id, token) {
+    id: string;
+    token: string | null;
+    constructor(id: string, token: string | null) {
         this.id = id;
         this.token = token;
     }
-    set(name, value) { this.token = value; }
-    get(name) { 
+    set(name: string, value: string) { this.token = value; }
+    get(name: string) {
         console.log(`MockCookies[${this.id}].get called`);
-        return this.token; 
+        return this.token;
     }
-    delete(name) { this.token = null; }
+    delete(name: string) { this.token = null; }
 }
 
 test("session.run fixes concurrency race condition", async () => {
@@ -30,21 +32,18 @@ test("session.run fixes concurrency race condition", async () => {
     await Promise.all([promiseA, promiseB]);
 });
 
-test("session.config inside session.run stays scoped", async () => {
+test("session.run contexts are fully isolated", async () => {
     const cookiesA = new MockCookies("A", "tokenA");
     const cookiesB = new MockCookies("B", "tokenB");
 
-    const promiseA = session.run({ cookies: cookiesA }, async () => {
+    const promiseA = session.run({ cookies: cookiesA, cookieName: "cookieA" }, async () => {
         await Bun.sleep(50);
-        session.config({ cookieName: "cookieA" });
         await Bun.sleep(100);
-        // This should still use cookieA even if B changed it
         return await session.getToken("cookieA");
     });
 
-    const promiseB = session.run({ cookies: cookiesB }, async () => {
+    const promiseB = session.run({ cookies: cookiesB, cookieName: "cookieB" }, async () => {
         await Bun.sleep(100);
-        session.config({ cookieName: "cookieB" });
         return await session.getToken("cookieB");
     });
 

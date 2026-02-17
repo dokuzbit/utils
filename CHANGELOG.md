@@ -11,6 +11,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.4] - February 18, 2026
+
+### 🔄 ☠️ Breaking Changes ☠️
+
+- **session**: `config()` removed. Use `session.init()` in hooks and call `getToken/setToken` directly everywhere else.
+- **session**: `handle()` renamed to `init()`.
+- **session**: `setToken()`, `clearToken()`, `deleteToken()` are now synchronous (no longer return Promise).
+- **session**: `PayloadInterface.error` type changed from `Error | null | string` to `string | null`.
+
+#### Migration
+
+```diff
+ // hooks.server.ts
+-export const handle = session.handle({ secret, cookieName });
++export const handle = session.init({ secret, cookieName });
+
+ // +page.server.ts
+-session.config({ cookies });
+-await session.setToken({ userId: 1 });
++session.setToken({ userId: 1 });
+ // ☝️ No config needed, init() already set up the context
+```
+
+### 🐛 Bug Fixes
+
+- **session**: Fixed `secure: false` and `maxAge: 0` being ignored due to `||` operator (replaced with `??`)
+- **session**: Fixed `callback === true` branch in `getToken` not stripping `exp/iat` before re-signing (caused jwt error)
+- **session**: Fixed `updateToken` crashing when `getToken` returns an error (now returns error early)
+
+### ✨ Added
+
+- **session**: `PayloadInterface<T>` now supports generics for typed payloads
+- **session**: `mergeDeep` now has prototype pollution protection (`__proto__`, `constructor`, `prototype` keys are filtered)
+
+---
+
 ## [0.3.3] - December 16, 2025
 
 ### 🐛 Bug Fixes // !!! Security Vulnerability !!! /s

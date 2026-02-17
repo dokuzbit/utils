@@ -27,17 +27,26 @@ interface SessionConfig {
 	maxAge: number;
 }
 
-interface PayloadInterface {
-	payload: any;
+export interface PayloadInterface<T = any> {
+	payload: T;
 	expired: boolean;
-	error: Error | null | string;
+	error: string | null;
 	exp: number;
 	iat: number;
 }
 
+type SessionOptions = Partial<Omit<SessionConfig, 'cookies'>>;
+
 // #endregion Interfaces
 
 const storage = new AsyncLocalStorage<SessionConfig>();
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function stripJwtFields(payload: any): any {
+	if (!payload || typeof payload !== 'object') return payload;
+	const { exp, iat, ...rest } = payload;
+	return rest;
+}
 
 export class Session {
 	private _sm: SessionConfig = {
@@ -66,46 +75,40 @@ export class Session {
 
 	constructor() { }
 
-	config(config: { cookies?: any, cookieName?: string, secret?: string, expiresIn?: string | number, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number }): Session {
-		this.sm = { ...this.sm, ...config };
-		return this;
-	}
-
-	run<T>(config: { cookies?: any, cookieName?: string, secret?: string, expiresIn?: string | number, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number }, callback: () => T): T {
-		return storage.run({ ...this.sm, ...config }, callback);
-	}
-
-	handle(options?: Partial<SessionConfig>) {
+	init(options?: SessionOptions) {
 		return async ({ event, resolve }: any) => {
 			return await storage.run({ ...this.sm, ...options, cookies: event.cookies }, () => resolve(event));
 		};
 	}
 
-	checkConfig() {
+	run<T>(config: { cookies?: any } & SessionOptions, callback: () => T): T {
+		return storage.run({ ...this.sm, ...config }, callback);
+	}
+
+	private checkConfig() {
 		if (!this.sm.cookies) throw new Error('Invalid session config');
 	}
 
-	async setToken(data: any, options: { cookieName?: string, expiresIn?: string, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number } = {}): Promise<PayloadInterface> {
+	setToken(data: any, options: { cookieName?: string, expiresIn?: string, path?: string, httpOnly?: boolean, secure?: boolean, maxAge?: number } = {}): PayloadInterface {
 		this.checkConfig();
-		delete data?.exp;
-		delete data?.iat;
+		data = stripJwtFields(data);
 		const token = jwt.sign(
 			data,
 			this.sm.secret as Secret,
-			{ expiresIn: options?.expiresIn || this.sm.expiresIn } as SignOptions
+			{ expiresIn: options?.expiresIn ?? this.sm.expiresIn } as SignOptions
 		);
-		this.sm.cookies?.set(options?.cookieName || this.sm.cookieName, token, {
-			path: options?.path || this.sm.path,
-			httpOnly: options?.httpOnly || this.sm.httpOnly,
-			secure: options?.secure || this.sm.secure,
-			maxAge: options?.maxAge || this.sm.maxAge
+		this.sm.cookies?.set(options?.cookieName ?? this.sm.cookieName, token, {
+			path: options?.path ?? this.sm.path,
+			httpOnly: options?.httpOnly ?? this.sm.httpOnly,
+			secure: options?.secure ?? this.sm.secure,
+			maxAge: options?.maxAge ?? this.sm.maxAge
 		});
 
 		const decoded = jwt.decode(token) as JwtPayload;
 		return this.returnPayload({ ...data, exp: decoded.exp, iat: decoded.iat }, false, null);
 	}
 
-	async getToken(cookieName?: string, callback?: ((payload: any) => Promise<PayloadInterface | boolean>) | boolean): Promise<PayloadInterface> {
+	async getToken<T = any>(cookieName?: string, callback?: ((payload: any) => Promise<PayloadInterface | boolean>) | boolean): Promise<PayloadInterface<T>> {
 		this.checkConfig();
 		const resolvedCookieName = cookieName || this.sm.cookieName;
 		const cookie = this.sm.cookies?.get(resolvedCookieName);
@@ -129,17 +132,14 @@ export class Session {
 							}
 
 							if (newPayload === true) {
-								const payloadWithoutExpIat = { ...payload };
-								delete payloadWithoutExpIat.exp;
-								delete payloadWithoutExpIat.iat;
-								return await this.setToken(payloadWithoutExpIat);
+								return this.setToken(stripJwtFields(payload));
 							}
 
 							const payloadData = typeof newPayload === 'object' && 'payload' in newPayload ? newPayload.payload : newPayload;
-							return await this.setToken(payloadData);
+							return this.setToken(payloadData);
 						} else {
 							if (callback === true) {
-								return await this.setToken(payload);
+								return this.setToken(stripJwtFields(payload));
 							}
 							return this.returnPayload(payload, true, null);
 						}
@@ -155,30 +155,28 @@ export class Session {
 
 	async updateToken(newPayload: any): Promise<PayloadInterface> {
 		const tokenResult = await this.getToken();
+		if (tokenResult.error || !tokenResult.payload) {
+			return tokenResult;
+		}
 		const mergedPayload = mergeDeep(tokenResult.payload, newPayload);
-		return await this.setToken(mergedPayload);
+		return this.setToken(mergedPayload);
 	}
 
-	async clearToken(cookieName?: string, cookiePath?: string): Promise<boolean> {
+	clearToken(cookieName?: string, cookiePath?: string): PayloadInterface {
 		this.checkConfig();
-		await this.setToken({}, { cookieName: cookieName || this.sm.cookieName, path: cookiePath || this.sm.path });
+		return this.setToken({}, { cookieName: cookieName ?? this.sm.cookieName, path: cookiePath ?? this.sm.path });
+	}
+
+	deleteToken(cookieName?: string, cookiePath?: string): boolean {
+		this.checkConfig();
+		this.sm.cookies?.delete(cookieName ?? this.sm.cookieName, { path: cookiePath ?? this.sm.path });
 		return true;
 	}
 
-	async deleteToken(cookieName?: string, cookiePath?: string): Promise<boolean> {
-		this.checkConfig();
-		this.sm.cookies?.delete(cookieName || this.sm.cookieName, { path: cookiePath || this.sm.path });
-		return true;
-	}
-
-	private returnPayload(payload: any, expired: boolean = false, error: Error | null | string = null): PayloadInterface {
+	private returnPayload<T = any>(payload: any, expired: boolean = false, error: string | null = null): PayloadInterface<T> {
 		const exp = payload?.exp;
 		const iat = payload?.iat;
-		const payloadCopy = payload ? { ...payload } : payload;
-		if (payloadCopy && typeof payloadCopy === 'object') {
-			delete payloadCopy.exp;
-			delete payloadCopy.iat;
-		}
+		const payloadCopy = stripJwtFields(payload);
 		return { payload: payloadCopy, expired, error, exp, iat };
 	}
 }
@@ -190,6 +188,7 @@ function mergeDeep(target: any, source: any): any {
 	if (!source) return { ...target };
 	const output = { ...target };
 	for (const key of Object.keys(source)) {
+		if (UNSAFE_KEYS.has(key)) continue;
 		if (
 			source[key] &&
 			typeof source[key] === 'object' &&
